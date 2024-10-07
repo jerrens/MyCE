@@ -54,7 +54,7 @@ function log() {
     local msg=$2
 
     if (( lvl <= VERBOSE )); then
-        echo "$msg"
+        echo -e "$msg"
     fi
 }
 
@@ -106,9 +106,10 @@ function main() {
 
                         log 1 "The command key '${cmd}' was found in '${dir}/.myVersion'"
                         log 2 "  with a value of '${key_value}'"
+                        log 1 ""
 
                         # Run the extracted command with the additional arguments
-                        runCMD "$binary_cmd $@"
+                        runCMD "$binary_cmd $*" 
                         exit $?
                     fi
                 fi
@@ -117,7 +118,8 @@ function main() {
             done
 
             # If the key was not found in any .myVersion file, run the default command
-            runCMD "$cmd $@"
+            log 1 "No .myVersion file was found in the current directory tree\n"
+            runCMD "$cmd $*"
             ;;
     esac
 }
