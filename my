@@ -1,7 +1,7 @@
 #!/bin/bash
 
 __Author="Jerren Saunders"
-__Version=24.10.7.1216
+__Version=24.10.7.1312
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -11,30 +11,49 @@ function print_usage() {
     includeAppInfo=${1}
     cat <<EOT
 
-This script will search the current directory tree for a file named '.myVersion', containing 
+This script will search the current directory tree for a file named '${MY_CUSTOM_FILE}', containing 
 a key that matches the first argument.  If found, the value of that key will be used instead.
 This can be used to allow local overriding of certain commands to point to a container
 instead of the local installed command.
 
 USAGE:
-    ${__ScriptName} [--<OPTION>] [COMMAND [args...]]
-        --help    Show usage
-        --version Show version number
+    ${__ScriptName} [-OPTIONS] [help | version | add | COMMAND [args...]]
+        add <cmd> <value>    Adds the 'cmd' to the ${MY_CUSTOM_FILE} file in the current directory.
+                             This command should be run in the workspace root directory.
+                             The given command will be used whenever called from this level or a descendant.
+        
+        <COMMAND> [...args]  The command to run
+        
+        help        Show usage
+        version     Show version number
 
-        COMMAND   The command to run
+    OPTIONS:
+        -v      Verbose Level (Multiple may be given to increase the verbosity)
+        -d      Dry Run.
+
 
 EOT
     if [[ ${includeAppInfo} ]]; then 
         cat <<EOT
-    By: ${__Author}
-    Version: ${__Version}
+ By: ${__Author}
+ Version: ${__Version}
+
 EOT
     fi
+
+    # Print options values if verbose mode
+    log 1 "Parsed Options:"
+    log 1 "  DryRun:  ${DRYRUN}"
+    log 1 "  Verbose: ${VERBOSE}"
+    log 1 "  File:    ${MY_CUSTOM_FILE}"
+    log 1 ""
+
 }
 
 # Default Settings
 VERBOSE=0
 DRYRUN=false
+MY_CUSTOM_FILE=.myCommand
 
 while getopts 'dv' option; do
     # echo "Option: ${option}"
@@ -70,6 +89,36 @@ function runCMD() {
     fi
 }
 
+# Adds a new key-value pair to the ${MY_CUSTOM_FILE} file in the current directory
+#  <string> key - The key to add
+#  <string> value - The value to associate with the key
+function add_key_value() {
+    local key=$1
+    local value="${*:2}"  # Capture all remaining arguments as the value
+    local my_version_file=${MY_CUSTOM_FILE}
+
+    # Check if the ${MY_CUSTOM_FILE} file exists, create it if not
+    if [ ! -f "$my_version_file" ]; then
+        log 1 "The ${MY_CUSTOM_FILE} file does not exist. Creating a new one."
+        touch "$my_version_file"
+    fi
+
+    # Check if the key already exists in the file
+    if grep -q "^$key=" "$my_version_file"; then
+        log 1 "The key '$key' already exists. Updating the value."
+        # Use sed to update the existing key's value
+        sed -i "s|^$key=.*|$key=$value|" "$my_version_file"
+    else
+        log 1 "Adding new key '$key' with value '$value'."
+        # Add the new key-value pair to the file
+        echo "$key=$value" >> "$my_version_file"
+    fi
+
+    log 2 "Updated .myVersion content:"
+    log 2 "$(cat $my_version_file)"
+    log 2
+}
+
 
 function main() {
     # The command to search for
@@ -87,6 +136,15 @@ function main() {
             exit 0
             ;;
 
+        add)
+            if [[ -z "$2" || -z "$3" ]]; then
+                log 1 "Usage: ${__ScriptName} add <key> <value>"
+                exit 1
+            fi
+            add_key_value "$2" "$3"
+            exit 0
+            ;;
+
         *)
             if [[ "${DRYRUN}" == "true" ]]; then echo "---- THIS IS A DRYRUN! ----"; fi
 
@@ -96,12 +154,12 @@ function main() {
             # Start in the current directory and move up the directory tree
             dir=$(pwd)
             while [ "$dir" != "/" ]; do
-                # Check if the .myVersion file exists in this directory
-                if [ -f "$dir/.myVersion" ]; then
-                    # Read the .myVersion file and store the content
-                    local -r my_version_content=$(<"$dir/.myVersion")
+                # Check if the ${MY_CUSTOM_FILE} file exists in this directory
+                if [ -f "$dir/${MY_CUSTOM_FILE}" ]; then
+                    # Read the ${MY_CUSTOM_FILE} file and store the content
+                    local -r my_version_content=$(<"$dir/${MY_CUSTOM_FILE}")
 
-                    # Search for the key in the .myVersion file
+                    # Search for the key in the ${MY_CUSTOM_FILE} file
                     key_value=$(echo "$my_version_content" | grep "^$cmd=")
                     if [ -n "$key_value" ]; then
                         # Extract the command after the key
@@ -118,7 +176,7 @@ function main() {
                             binary_cmd=${binary_cmd//$var/$var_value}
                         done
 
-                        log 1 "The command key '${cmd}' was found in '${dir}/.myVersion'"
+                        log 1 "The command key '${cmd}' was found in '${dir}/${MY_CUSTOM_FILE}'"
                         log 2 "  with a value of '${binary_cmd}'"
                         log 1 ""
 
@@ -131,8 +189,8 @@ function main() {
                 dir=$(dirname "$dir")
             done
 
-            # If the key was not found in any .myVersion file, run the default command
-            log 1 "No .myVersion file was found in the current directory tree\n"
+            # If the key was not found in any ${MY_CUSTOM_FILE} file, run the default command
+            log 1 "No ${MY_CUSTOM_FILE} file was found in the current directory tree\n"
             runCMD "$cmd $*"
             ;;
     esac
@@ -149,6 +207,8 @@ exit 0
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 24.10.7.1312 Added command to add key to the .myCommand file
+                Changed to using file ".myCommand" as default
  - 24.10.7.1216 Added ability to define variables within the .myVersion file that
                 can be referenced and expanded in the key values
  - 24.10.7:     Initial Creation 
