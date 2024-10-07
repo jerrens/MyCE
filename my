@@ -1,0 +1,137 @@
+#!/bin/bash
+
+__Author="Jerren Saunders"
+__Version=24.10.7
+__ScriptName=$(basename "$0") # File name with extension
+__AppDir=$(dirname "$0") # Path where script is stored
+__AppName=${__ScriptName%.*} # File name without extension
+__origArgs=$* # Capture all of the original arguments
+
+function print_usage() {
+    includeAppInfo=${1}
+    cat <<EOT
+
+This script will search the current directory tree for a file named '.myVersion', containing 
+a key that matches the first argument.  If found, the value of that key will be used instead.
+This can be used to allow local overriding of certain commands to point to a container
+instead of the local installed command.
+
+USAGE:
+    ${__ScriptName} [--<OPTION>] [COMMAND [args...]]
+        --help    Show usage
+        --version Show version number
+
+        COMMAND   The command to run
+
+EOT
+    if [[ ${includeAppInfo} ]]; then 
+        cat <<EOT
+    By: ${__Author}
+    Version: ${__Version}
+EOT
+    fi
+}
+
+# Default Settings
+VERBOSE=0
+DRYRUN=false
+
+while getopts 'dv' option; do
+    # echo "Option: ${option}"
+    case ${option} in 
+        d ) DRYRUN=true ;;
+        v ) VERBOSE=$((VERBOSE + 1)) ;;
+        * ) # Do Nothing
+    esac
+done
+shift $((OPTIND -1)) # Remaining args will be left
+
+# Prints log message to the terminal
+#  <int> lvl - Print Level: Only print this message if the VERSBOSE level is greater than or equal to this
+#  <string> msg - Message to print
+function log() {
+    local lvl=$1
+    local msg=$2
+
+    if (( lvl <= VERBOSE )); then
+        echo "$msg"
+    fi
+}
+
+# Either runs the command or prints the command that would be executed if DRYRUN is 'true'
+#  <cmd> cmd - Command to execute or print
+function runCMD() {
+    local cmd="$*"
+
+    if [[ "${DRYRUN}" == "true" ]]; then 
+        log 0 "CMD: ${cmd}"
+    else 
+        eval "${cmd}"
+    fi
+}
+
+
+function main() {
+    # The command to search for
+    cmd=$1
+
+    # Check for command line args
+    case "$1" in
+        help)
+            print_usage true
+            exit 0
+            ;;
+
+        version)
+            echo "${__Version}"
+            exit 0
+            ;;
+
+        *)
+            if [[ "${DRYRUN}" == "true" ]]; then echo "---- THIS IS A DRYRUN! ----"; fi
+
+            # Shift the arguments so that $@ does not include the first argument (the command)
+            shift
+
+            # Start in the current directory and move up the directory tree
+            dir=$(pwd)
+            while [ "$dir" != "/" ]; do
+                # Check if the .myVersion file exists in this directory
+                if [ -f "$dir/.myVersion" ]; then
+                    # Search for the key in the .myVersion file
+                    key_value=$(grep "^$cmd=" "$dir/.myVersion")
+                    if [ -n "$key_value" ]; then
+                        # Extract the command after the key
+                        binary_cmd=$(echo "$key_value" | cut -d '=' -f2-)
+
+                        log 1 "The command key '${cmd}' was found in '${dir}/.myVersion'"
+                        log 2 "  with a value of '${key_value}'"
+
+                        # Run the extracted command with the additional arguments
+                        runCMD "$binary_cmd $@"
+                        exit $?
+                    fi
+                fi
+                # Move up to the parent directory
+                dir=$(dirname "$dir")
+            done
+
+            # If the key was not found in any .myVersion file, run the default command
+            runCMD "$cmd $@"
+            ;;
+    esac
+}
+
+# Call main function and pass all (remaining) CL args
+main "$@"
+exit 0
+
+
+
+######################################
+###  Change History
+######################################
+# shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
+/dev/null <<EOT
+ - 24.10.7:     Initial Creation
+EOT
