@@ -1,7 +1,7 @@
 #!/bin/bash
 
 __Author="Jerren Saunders"
-__Version=24.10.9
+__Version=24.10.9.1616
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -83,12 +83,11 @@ function log() {
 # Either runs the command or prints the command that would be executed if DRYRUN is 'true'
 #  <cmd> cmd - Command to execute or print
 function runCMD() {
-    local cmd="$*"
-
     if [[ "${DRYRUN}" == "true" ]]; then 
-        log 0 "CMD: ${cmd}"
+        log 0 "CMD: $*"
     else 
-        eval "${cmd}"
+        # Use printf to properly escape all arguments before passing them to eval
+        eval "$*"
     fi
 }
 
@@ -284,7 +283,11 @@ function main() {
                         log 1 ""
 
                         # Run the extracted command with the additional arguments
-                        runCMD "$binary_cmd $*" 
+                        local args
+                        if [ $# -gt 0 ]; then
+                            printf -v args '%q ' "$@"
+                        fi
+                        runCMD "$binary_cmd" "$args"
                         exit $?
                     fi
                 fi
@@ -340,6 +343,7 @@ exit 0
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 24.10.9.1616 Fix to preserve quotes around arguments when passing
  - 24.10.9      Added 'list' command
                 # FIXME: Added dead code blocks to switch over to using INI file format with sections
  - 24.10.7.1312 Changed to using file ".myCommand" as default
