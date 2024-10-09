@@ -1,0 +1,23 @@
+# This file is used by the 'my' script
+#  See: https://github.com/jerrens/MyCE
+
+# Should start with uppercase letter
+[Variables]
+WORKSPACE_ROOT=/home/jerren/code/pod/cns-podman
+MONGO_CONTAINER=mongodb
+
+
+# Should start with lowercase letter
+[Commands]
+echo=echo "Overridden In .myCommand: "
+
+php=podman exec -it pod-php81 php
+flask=podman exec -it pod-python-flask flask
+mongosh=podman exec --tty --interactive $MONGO_CONTAINER mongosh
+mssqlcmd=podman exec -it pod-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P '$3cr3+Passw0rd'
+psql=podman exec -it pod-postgres psql -U postgres
+
+# Podman Pod
+pod-up=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml && popd > /dev/null
+pod-down=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --down && popd > /dev/null
+pod-replace=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --replace && popd > /dev/null

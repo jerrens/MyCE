@@ -1,7 +1,7 @@
 #!/bin/bash
 
 __Author="Jerren Saunders"
-__Version=24.10.7.1312
+__Version=24.10.9
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -17,10 +17,13 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    ${__ScriptName} [-OPTIONS] [help | version | add | COMMAND [args...]]
+    ${__ScriptName} [-OPTIONS] [help | version | add | list [-l] | COMMAND [args...]]
         add <cmd> <value>    Adds the 'cmd' to the ${MY_CUSTOM_FILE} file in the current directory.
                              This command should be run in the workspace root directory.
                              The given command will be used whenever called from this level or a descendant.
+
+        list [-l]           List the available command keys.
+                            Includemy he the '-l' arg to list one key per line.  Default is column view.
         
         <COMMAND> [...args]  The command to run
         
@@ -89,6 +92,49 @@ function runCMD() {
     fi
 }
 
+
+# # Function to read a value from an INI file under a specific section
+# # Usage: read_ini <filename> <section> <key>
+# read_ini() {
+#     local filename=$1
+#     local section=$2
+#     local key=$3
+#     local value=$(awk -F '=' -v section="[$section]" -v key="$key" '
+#     $0 == section {in_section = 1; next}
+#     in_section && $1 == key {print $2; exit}
+#     /^\[.*\]$/ && in_section {in_section = 0}' "$filename")
+#     echo $value
+# }
+
+# # Function to write a value to an INI file under a specific section
+# # Usage: write_ini <filename> <section> <key> <value>
+# write_ini() {
+#     local filename=$1
+#     local section=$2
+#     local key=$3
+#     local value=$4
+#     local in_section=0
+#     local found=0
+
+#     awk -v sec="[$section]" -v key="$key" -v value="$value" '
+#     BEGIN { FS=OFS="=" }
+#     /^\[.*\]$/ { in_section=0 }
+#     $0 == sec  { in_section=1; print; next }
+#     in_section && $1 == key { $2=value; found=1 }
+#     { print }
+#     END {
+#         if (!found && in_section) {
+#             print key "=" value
+#         }
+#     }' "$filename" > tmpfile && mv tmpfile "$filename"
+# }
+
+# # Example usage:
+# # read_ini "config.ini" "SectionName" "username"
+# # write_ini "config.ini" "SectionName" "username" "newuser"
+
+
+
 # Adds a new key-value pair to the ${MY_CUSTOM_FILE} file in the current directory
 #  <string> key - The key to add
 #  <string> value - The value to associate with the key
@@ -120,6 +166,57 @@ function add_key_value() {
 }
 
 
+# # Adds a new key-value pair to the ${MY_CUSTOM_FILE} file in the current directory
+# #  <string> key - The key to add
+# #  <string> value - The value to associate with the key
+# function add_key_value_USING_INI() {
+#     local key=$1
+#     local value="${*:2}"  # Capture all remaining arguments as the value
+#     local my_version_file=${MY_CUSTOM_FILE}
+
+#     # Use write_ini to add or update the key-value pair under the 'commands' section
+#     write_ini "$my_version_file" "commands" "$key" "$value"
+
+#     log 2 "Updated ${MY_CUSTOM_FILE} content:"
+#     log 2 "$(cat $my_version_file)"
+#     log 2
+# }
+
+# Function to list all keys from the ${MY_CUSTOM_FILE} files in the current directory tree
+# If the -l argument is given, output will not be piped to column.
+function list_keys() {
+    local my_version_file=${MY_CUSTOM_FILE}
+    local dir
+    dir=$(pwd)
+    local -r indent="    "
+    local use_column=true
+
+    # Check for -l argument
+    if [[ "$1" == "-l" ]]; then
+        use_column=false
+    fi
+
+    # Check if the ${MY_CUSTOM_FILE} file exists in the current directory or up the tree
+    while [ "$dir" != "/" ]; do
+        if [ -f "$dir/${MY_CUSTOM_FILE}" ]; then
+            log 0 "The following commands are available:"
+            log 1 "  from '${dir}/${MY_CUSTOM_FILE}':"
+            if [[ "$use_column" == true ]]; then
+                grep '^[a-z][^=]*=' "$dir/${MY_CUSTOM_FILE}" | cut -d '=' -f1 | sort | sed "s/^/${indent}/" | column
+            else
+                grep '^[a-z][^=]*=' "$dir/${MY_CUSTOM_FILE}" | cut -d '=' -f1 | sort | sed "s/^/${indent}/"
+            fi
+
+            exit 0
+        fi
+        dir=$(dirname "$dir")
+    done
+
+    log 1 "No ${MY_CUSTOM_FILE} file was found in the current directory tree."
+    return 1
+}
+
+
 function main() {
     # The command to search for
     cmd=$1
@@ -142,6 +239,12 @@ function main() {
                 exit 1
             fi
             add_key_value "$2" "$3"
+            exit 0
+            ;;
+
+        list)
+            shift
+            list_keys "$@"
             exit 0
             ;;
 
@@ -189,6 +292,36 @@ function main() {
                 dir=$(dirname "$dir")
             done
 
+            # REVIEW: The following is new logic to use the r/w INI methods as suggested by OpenAI
+            # # Start in the current directory and move up the directory tree
+            # dir=$(pwd)
+            # while [ "$dir" != "/" ]; do
+            #     # Check if the ${MY_CUSTOM_FILE} file exists in this directory
+            #     if [ -f "$dir/${MY_CUSTOM_FILE}" ]; then
+            #         # Search for the command in the 'commands' section of the ${MY_CUSTOM_FILE} file
+            #         binary_cmd=$(read_ini "$dir/${MY_CUSTOM_FILE}" "commands" "$cmd")
+            #         if [ -n "$binary_cmd" ]; then
+            #             # Replace any variables found in binary_cmd with their values from the 'vars' section
+            #             while [[ "$binary_cmd" =~ (\$[a-zA-Z_][a-zA-Z_0-9]*) ]]; do
+            #                 var=${BASH_REMATCH[1]}
+            #                 # Remove the leading $ from the variable name
+            #                 var_name=${var:1}
+            #                 # Get the value of the variable from the 'vars' section
+            #                 var_value=$(read_ini "$dir/${MY_CUSTOM_FILE}" "vars" "$var_name")
+            #                 # Substitute the variable in the binary_cmd
+            #                 binary_cmd=${binary_cmd//$var/$var_value}
+            #             done
+            # 
+            #             # ... [rest of the binary_cmd execution]
+            # 
+            #             exit $?
+            #         fi
+            #     fi
+            #     # Move up to the parent directory
+            #     dir=$(dirname "$dir")
+            # done
+            # END REVIEW: OpenAI code block 
+
             # If the key was not found in any ${MY_CUSTOM_FILE} file, run the default command
             log 1 "No ${MY_CUSTOM_FILE} file was found in the current directory tree\n"
             runCMD "$cmd $*"
@@ -207,8 +340,9 @@ exit 0
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
- - 24.10.7.1312 Added command to add key to the .myCommand file
-                Changed to using file ".myCommand" as default
+ - 24.10.9      Added 'list' command
+                # FIXME: Added dead code blocks to switch over to using INI file format with sections
+ - 24.10.7.1312 Changed to using file ".myCommand" as default
  - 24.10.7.1216 Added ability to define variables within the .myVersion file that
                 can be referenced and expanded in the key values
  - 24.10.7:     Initial Creation 
