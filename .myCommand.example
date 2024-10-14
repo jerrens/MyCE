@@ -1,23 +1,28 @@
 # This file is used by the 'my' script
 #  See: https://github.com/jerrens/MyCE
 
-# Should start with uppercase letter
-[Variables]
-WORKSPACE_ROOT=/home/jerren/code/pod/cns-podman
-MONGO_CONTAINER=mongodb
+# Variables should start with uppercase letter
+# CONTAINER=podman exec CONTAINER_NAME
+CONTAINER=podman exec -til
+FLASK_CONTAINER=podman exec -it pod-flask
+MONGO_CONTAINER_NAME=pod-mongodb
 
-
-# Should start with lowercase letter
-[Commands]
+# Commands should start with lowercase letter
 echo=echo "Overridden In .myCommand: "
-
-php=podman exec -it pod-php81 php
-flask=podman exec -it pod-python-flask flask
-mongosh=podman exec --tty --interactive $MONGO_CONTAINER mongosh
-mssqlcmd=podman exec -it pod-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P '$3cr3+Passw0rd'
+npm=$CONTAINER npm
+php=$CONTAINER php
+flask=${FLASK_CONTAINER} flask
+mongosh=podman exec --tty --interactive $MONGO_CONTAINER_NAME mongosh
+mssqlcmd=podman exec -it pod-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA
 psql=podman exec -it pod-postgres psql -U postgres
+whoami=$CONTAINER whoami
+
+[scope]
+sub=echo "This command referenced when using \'my scope.sub\'"
 
 # Podman Pod
-pod-up=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml && popd > /dev/null
-pod-down=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --down && popd > /dev/null
-pod-replace=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --replace && popd > /dev/null
+# Commands run with 'pod.up', etc.
+[pod]
+up=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml && popd > /dev/null
+down=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --down && popd > /dev/null
+replace=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --replace && popd > /dev/null
