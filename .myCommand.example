@@ -1,21 +1,28 @@
 # This file is used by the 'my' script
 #  See: https://github.com/jerrens/MyCE
 
+# REGION: Variables
 # Variables should start with uppercase letter
-# CONTAINER=podman exec CONTAINER_NAME
-CONTAINER=podman exec -til
+LAST_CONTAINER=podman exec -til
 FLASK_CONTAINER=podman exec -it pod-flask
 MONGO_CONTAINER_NAME=pod-mongodb
+CONTAINER_NAME=container-name
+# END REGION: Variables
 
+# REGION: Commands
 # Commands should start with lowercase letter
+
+# Macro to prompt user with a confirmation.  See test.confirm
+confirm=read -rp "Are you sure? [Y/n] " -n 1 && echo && [[ $REPLY =~ ^[Yy]$ ]];
+
 echo=echo "Overridden In .myCommand: "
-npm=$CONTAINER npm
-php=$CONTAINER php
+npm=$LAST_CONTAINER npm
+php=$LAST_CONTAINER php
 flask=${FLASK_CONTAINER} flask
 mongosh=podman exec --tty --interactive $MONGO_CONTAINER_NAME mongosh
 mssqlcmd=podman exec -it pod-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA
 psql=podman exec -it pod-postgres psql -U postgres
-whoami=$CONTAINER whoami
+whoami=$LAST_CONTAINER whoami
 
 [scope]
 sub=echo "This command referenced when using \'my scope.sub\'"
@@ -26,3 +33,11 @@ sub=echo "This command referenced when using \'my scope.sub\'"
 up=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml && popd > /dev/null
 down=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --down && popd > /dev/null
 replace=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --replace && popd > /dev/null
+
+[pod.name]
+con=podman exec -it $CONTAINER_NAME bash
+log=podman logs $CONTAINER_NAME
+
+[test]
+# Variable substitution can also include macro-type commands
+confirm={ $confirm } && echo "yes" || echo "no"
