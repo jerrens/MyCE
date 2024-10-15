@@ -1,7 +1,7 @@
 #!/bin/bash
 
 __Author="Jerren Saunders"
-__Version=24.10.14
+__Version=24.10.15
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -87,7 +87,16 @@ function runCMD() {
         log 0 "CMD: $*"
     else
         # Use printf to properly escape all arguments before passing them to eval
-        eval "$*"
+        eval_error=$(eval "$*" 2>&1 > /dev/tty)
+        eval_exit=$?
+
+        if [ $eval_exit -ne 0 ]; then
+            log 0 "An error occured running: $*"
+            log 1 "  $eval_error" >&2
+            exit $eval_exit
+        else
+            log 2 "Command executed successfully"
+        fi
     fi
 }
 
@@ -268,7 +277,9 @@ declare -A commands
 function process_ini_file() {
     log 1 "Loading file: $1"
     local section=""
-    while IFS= read -r line || [[ -n "$line" ]]; do
+    while IFS= read -r line <&3 || [[ -n "$line" ]]; do
+        # echo " Line1 - $line"
+
         # Skip empty lines and comments
         if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*# ]]; then
             continue
@@ -282,10 +293,16 @@ function process_ini_file() {
 
         # Split the line into key and value
         IFS='=' read -r key value <<< "$line"
+        # echo "     2 - $line"
 
         # Trim whitespace from key and value
-        key=$(echo "$key" | xargs)
-        value=$(echo "$value" | xargs)
+        # key=$(echo "$key" | xargs)
+        # value=$(echo "$value" | xargs)
+        key="${key#"${key%%[![:space:]]*}"}"   # remove leading whitespace characters
+        key="${key%"${key##*[![:space:]]}"}"   # remove trailing whitespace characters
+        value="${value#"${value%%[![:space:]]*}"}"   # remove leading whitespace characters
+        value="${value%"${value##*[![:space:]]}"}"   # remove trailing whitespace characters
+        # echo "     3 - $key=$value"
 
         # If section is not empty, prepend it to the key with an underscore
         if [[ -n "$section" ]]; then
@@ -303,7 +320,9 @@ function process_ini_file() {
         fi
 
         commands["$key"]=$value
-    done < "$1"
+        # echo "     4 - $key=${commands["$key"]}"
+    # done < "$1"
+    done 3< <(cat "$1")
     log 2 "" # Add some spacing in extra verbose mode
 }
 
@@ -507,6 +526,13 @@ function main() {
             set_key_value "$1" "${@:2}"
             exit 0
             ;;
+        
+        test)
+            process_ini_file "/home/jerren/code/shell/.myCommand"
+            printf "%s\n" "${!commands[@]}" | grep '^[a-z]' | sort | column
+            printf "%s\n" "${commands[wrap]}" | grep '^[a-z]' | sort | column
+            exit 0
+            ;;
 
         list)
             shift
@@ -531,6 +557,7 @@ exit 0
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 24.10.15     BugFix: Commands containing \n not processed correctly
  - 24.10.14     Added support to combine all .myCommand files in the directory tree
                 Added support for INI section grouping
                 Changed 'add' command to 'set'
