@@ -17,7 +17,7 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    ${__ScriptName} [-OPTIONS] [help | version | add | list [-l] | COMMAND [args...]]
+    ${__ScriptName} [-OPTIONS] [help | version | set | list [-l] | COMMAND [args...]]
         set <cmd> <value>    Adds or updates the 'cmd' to the ${MY_CUSTOM_FILE} file in the current directory.
                              This command should be run in the workspace root directory.
                              The given command will be used whenever called from this level or a descendant.
