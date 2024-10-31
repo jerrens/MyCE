@@ -1,7 +1,7 @@
 #!/bin/bash
 
 __Author="Jerren Saunders"
-__Version=24.10.15.1731
+__Version=24.10.16
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -264,11 +264,9 @@ function set_ini_value() {
 # Reads an INI-style file and loads the valid sections and keys into the commands
 # associative array.  Keys within a section will have a '.'' as a delimiter
 declare -A commands
-declare -a order # Indexed array to store the order of the keys
 function process_ini_file() {
     log 1 "Loading file: $1"
     local section=""
-    local index=0 # Index to keep track of the order
     while IFS= read -r line <&3 || [[ -n "$line" ]]; do
         # echo " Line1 - $line"
 
@@ -304,7 +302,6 @@ function process_ini_file() {
         # Before adding the key-value pair to the associative array,
         # add the key to the indexed array to preserve the order.
         if [[ ! -v commands["$key"] ]]; then
-            order[index++]="$key"
             log 3 "  ADD:      ${key} = ${value}"
         else
             log 2 "  REPLACE:  ${key} = ${value}"
@@ -356,8 +353,7 @@ function findKey() {
     log 1 "Searching for cmd: $cmd"
     foundKey_value=""  # Clear previous search result
 
-    # for key in "${!commands[@]}"; do
-    for key in "${order[@]}"; do # Iterate by order
+    for key in "${!commands[@]}"; do
         log 2 "    Inspecting '$key'"
         if [[ "$key" == "$cmd" ]]; then
             foundKey_value="${commands[$key]}"
@@ -566,6 +562,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 24.10.16         BugFix: Replacing variables in array when merging causes order issues
  - 24.10.15.1731    Added code to preserve command order
                     Partial command match no longer supported
                     BugFix: Infinite loops possible by variable dereferencing
