@@ -41,3 +41,7 @@ log=podman logs $CONTAINER_NAME
 [test]
 # Variable substitution can also include macro-type commands
 confirm={ $confirm } && echo "yes" || echo "no"
+
+# Run this test with `my test.pos $(seq 1 15)`
+# Expect 10 1 5 11 12 13 14 15
+pos=echo $10 $1 $5 \$8
