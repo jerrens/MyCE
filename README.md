@@ -16,18 +16,20 @@
 
 My Command Engine or MyCE (as in "Mice") is a powerful, context-aware command-line tool, written intirely in bash, and designed to streamline project workflows by utilizing custom command definitions stored in `.myCommand` files within the directory tree.
 It searches for `.myCommand` files from the root down to the current directory, merging commands to create a localized and context-sensitive command set.
+The `~/.myCommand` file will always be processed first, even if not executed within your $HOME directory
 This tool is ideal for developers who frequently switch between projects or environments and need specific commands scoped to each context.
 
 
 
 ## Features
 
-- **Context-Aware Commands**: Executes commands based on the .myCommand file located in the current directory or its parent directories.
+- **Context-Aware Commands**: Executes commands based on the `.myCommand` file located in the current directory or its parent directories.
 - **Scoped Command Aliases**: Each directory (or project) can define its own command aliases without impacting other directories.
-- **Ease of Use**: A simple command `my <key>` is all you need to invoke the corresponding full command defined in the .myCommand file.
-- **Recursive Lookup**: If a .myCommand file is not found in the current directory, the script searches parent directories until one is found.
-- **Merged Configurations**: Reads .myCommand files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
-- **Sectioned Commands**: Uses INI-style sections in .myCommand files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
+- **Ease of Use**: A simple command `my <key>` is all you need to invoke the corresponding full command defined in the `.myCommand` file.
+- **Recursive Lookup**: If a `.myCommand` file is not found in the current directory, the script searches parent directories until one is found.
+- **Merged Configurations**: Reads `.myCommand` files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
+- **Sectioned Commands**: Uses INI-style sections in `.myCommand` files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
+- **Positional Args**: Values within the `.myCommand` file can use positional argument references (ie $1, $2, ${3})
 
 ```ini
 [server]
@@ -38,8 +40,8 @@ stop="docker-compose down"
 Running `my server.start` will execute docker-compose up.
 
 - **Argument Passing**: Additional arguments provided after the command alias are passed directly to the underlying command. This enables dynamic behavior and flexible command usage.
-- **Fallback to Shell**: If the requested alias is not found in the merged .myCommand configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
-- **Cross-Domain Commands with Variables**: Commands can reference variables set in different .myCommand files, allowing for reusable, high-level command configurations across directories. This feature is useful for defining generic commands in higher-level folders and reusing them in specific contexts within the workspace.
+- **Fallback to Shell**: If the requested alias is not found in the merged `.myCommand` configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
+- **Cross-Domain Commands with Variables**: Commands can reference variables set in different `.myCommand` files, allowing for reusable, high-level command configurations across directories. This feature is useful for defining generic commands in higher-level folders and reusing them in specific contexts within the workspace.
 
 
 
@@ -153,7 +155,7 @@ Example: `my -d build`
 
 ### Handling Variables Across Directories
 
-Variables can be set in .myCommand files at any directory level and accessed by commands in lower directories, allowing for flexible and reusable configurations.
+Variables can be set in `.myCommand` files at any directory level and accessed by commands in lower directories, allowing for flexible and reusable configurations.
 
 
 
@@ -166,7 +168,7 @@ Variables can be set in .myCommand files at any directory level and accessed by 
     Run the following command to give the script execute permissions: `chmod +x /path/to/my`
 
 1. **Create `.myCommand` files**:
-    Add a .myCommand file in the root directories of your projects.
+    Add a `.myCommand` file in the root directories of your projects.
 
 **Optional**: You can add my to your .bashrc or .zshrc for easier access:
 
@@ -177,16 +179,16 @@ alias my='/path/to/my'
 
 ## Example Workflow
 
-You have two repositories, Repo1 and Repo2, both with their own .myCommand files.
+You have two repositories, Repo1 and Repo2, both with their own `.myCommand` files.
 
 ```ini
-# Repo1's .myCommand file:
+# Repo1's `.myCommand` file:
 build="mvn clean package"
 run="java -jar target/app.jar"
 ```
 
 ```ini
-# Repo2's .myCommand file:
+# Repo2's `.myCommand` file:
 
 build="npm run build"
 run="npm start"

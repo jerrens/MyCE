@@ -331,6 +331,11 @@ function load_my_custom_files() {
         dir=$(dirname "$dir")
     done
 
+    # Always process the home dir file first (if it exists)
+    if [ -f "${HOME}/${MY_CUSTOM_FILE}" ]; then
+        file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
+    fi
+
     # Process the files in reverse order
     for (( idx=${#file_paths[@]}-1 ; idx>=0 ; idx-- )) ; do
         process_ini_file "${file_paths[idx]}"
@@ -590,6 +595,7 @@ exit $?
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
  - 24.11.7          Added support for positional args ($1, $2) within the .myCommand values
+                    Always load the .myCommand file in the user home directory (even if not in current directory tree)
  - 24.10.16         BugFix: Replacing variables in array when merging causes order issues
  - 24.10.15.1731    Added code to preserve command order
                     Partial command match no longer supported
