@@ -455,29 +455,29 @@ function find_and_run_cmd() {
         # Replace any variables found in binary_cmd with their values
 
         # Handle positional args first
-        max_position_ref=-1
+        max_arg_num=-1
         args=("$@")
         log 2 "Checking for positional args: $* (${#args[@]})"
         for ((i = ${#args[@]}; i >= 0; i--)); do
             arg=${args[$i-1]}
             log 3 "i is ${i}, arg is ${arg}"
 
-            if [[ "$binary_cmd" =~ \$\{?(${i})\}? ]]; then
+            if [[ "$binary_cmd" =~ [^\\]\$\{?(${i})\}? ]]; then
                 # Record this max reference so we know how much to shift
-                if [ "${BASH_REMATCH[1]}" -gt "$max_position_ref" ]; then
-                    max_position_ref=${BASH_REMATCH[1]}
-                    log 3 "Highest positional arg found at $max_position_ref"
+                if [ "${BASH_REMATCH[1]}" -gt "$max_arg_num" ]; then
+                    max_arg_num=${BASH_REMATCH[1]}
+                    log 3 "Highest positional arg found at $max_arg_num"
                 fi
 
                 log 2 "Replacing positional argument reference '\$${BASH_REMATCH[1]}' with '${arg}'"
-                binary_cmd=${binary_cmd//\$${BASH_REMATCH[1]}/$arg}
+                binary_cmd=${binary_cmd//[^\\]\$${BASH_REMATCH[1]}/$arg}
                 log 2 "    New:  $binary_cmd"
             fi
         done
         # Shift args to the highest reference found
         # Any remaining args will be left to pass on
-        log 3 "Shifting args by $max_position_ref"
-        shift "$max_position_ref"
+        log 3 "Shifting args by $max_arg_num"
+        shift "$max_arg_num"
 
 
         local loopCount=0
