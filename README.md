@@ -120,6 +120,14 @@ Can't remember what you used as the key?
 Just enter `my list` to view the available commands.
 If you don't like columns, add the `-l` option at the end to show one command per line
 
+`update`:
+Easily pull down the latest version from the github repo.
+The file will be downloaded into `/usr/local/bin` and the permissions set to 755.
+This command needs to be run with root level privileges.
+If not, it will attempt to elevate itself and prompt for a password if needed.
+NOTE: This pulls down the latest checked-in version and not the latest release.
+It may contain bugs.
+
 
 ### Options
 

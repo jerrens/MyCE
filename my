@@ -1,7 +1,7 @@
 #!/bin/bash
 
 __Author="Jerren Saunders"
-__Version=24.11.7
+__Version=24.11.8
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -578,6 +578,29 @@ function main() {
             exit 0
             ;;
 
+        update)
+            shift
+            if [ "$EUID" -ne 0 ]; then
+                log 0 "This should be run as root.  Attempting to elevate permissions..."
+                
+	            #Re-run this command as sudo
+                if command -v dzdo >/dev/null 2>&1; then
+                    dzdo "$0"
+                else
+                    sudo "$0"
+                fi
+                exit
+            fi
+            # Root Level if here
+
+            # Download the latest version of my
+            curl -o /usr/local/bin/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
+
+            # Make it executable
+            chmod 755 /usr/local/bin/my
+            exit 0
+            ;;
+
         *)
             find_and_run_cmd "$@"
             ;;
@@ -596,6 +619,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 24.11.8          Added 'update' command
  - 24.11.7          Added support for positional args ($1, $2) within the .myCommand values
                     Always load the .myCommand file in the user home directory (even if not in current directory tree)
  - 24.10.16         BugFix: Replacing variables in array when merging causes order issues
