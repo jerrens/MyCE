@@ -579,25 +579,30 @@ function main() {
             ;;
 
         update)
-            shift
             if [ "$EUID" -ne 0 ]; then
                 log 0 "This should be run as root.  Attempting to elevate permissions..."
-                
+
 	            #Re-run this command as sudo
                 if command -v dzdo >/dev/null 2>&1; then
-                    dzdo "$0"
+                    runCMD dzdo "$0" "$*"
                 else
-                    sudo "$0"
+                    runCMD sudo "$0" "$*"
                 fi
                 exit
             fi
+
             # Root Level if here
+            github_path=https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
+            log 0 "\nDownloading latest version from GitHub..."
+            log 0 "    $github_path\n"
 
             # Download the latest version of my
-            curl -o /usr/local/bin/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
+            curl --silent --output /usr/local/bin/my "$github_path"
 
             # Make it executable
+            log 0 "\nModifying permissions..."
             chmod 755 /usr/local/bin/my
+            log 0 "Update finished!"
             exit 0
             ;;
 
