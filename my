@@ -548,7 +548,7 @@ function update_script() {
     install_path=$0
 
     # Check for internet access
-    if ! ping -q -c 1 -W 1 github.com >/dev/null; then
+    if ! ping -q -c 1 -W 1 8.8.8.8 >/dev/null; then
         log 0 "No internet connection!"
         exit 1
     fi
