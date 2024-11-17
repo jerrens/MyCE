@@ -174,17 +174,24 @@ Variables can be set in `.myCommand` files at any directory level and accessed b
 
 ## Installation
 
-1. **Download the script**:
+1. **Download the File**:
     Ensure the script file (`my`) is placed in a directory that is included in your system's $PATH.
     It is recommended to install at `/usr/local/bin/my`
+    The permissions of the downloaded file will also need to be updated to allow for execution
 
-1. **Make the script executable**:
-    Run the following command to give the script execute permissions: `chmod +x /path/to/my`
+    ```shell
+    # Note: You may need to run with `sudo`
+    curl -o /usr/local/sbin/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
+    chmod +x /usr/local/sbin/my
+    ```
+
 
 1. **Create `.myCommand` files**:
     Add a `.myCommand` file in the root directories of your projects.
 
-**Optional**: You can add my to your .bashrc or .zshrc for easier access:
+    A sample is available at <https://github.com/jerrens/MyCE/blob/main/.myCommand.example>
+
+**Optional**: You can add my to your .bashrc or .zshrc if you prefer:
 
 ```bash
 alias my='/path/to/my'
