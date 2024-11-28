@@ -13,7 +13,7 @@ CONTAINER_NAME=container-name
 # Commands should start with lowercase letter
 
 # Macro to prompt user with a confirmation.  See test.confirm
-confirm=read -rp "Are you sure? [Y/n] " -n 1 && echo && [[ $REPLY =~ ^[Yy]$ ]];
+_confirm=read -rp "Are you sure? [Y/n] " -n 1 && echo && [[ $REPLY =~ ^[Yy]$ ]];
 
 echo=echo "Overridden In .myCommand: "
 npm=$LAST_CONTAINER npm
@@ -37,10 +37,11 @@ replace=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube pod.yaml --repla
 [pod.name]
 con=podman exec -it $CONTAINER_NAME bash
 log=podman logs $CONTAINER_NAME
+log+=${pod.name.log} --follow --tail 10
 
 [test]
 # Variable substitution can also include macro-type commands
-confirm={ $confirm } && echo "yes" || echo "no"
+confirm={ $_confirm } && echo "yes" || echo "no"
 
 # Run this test with `my test.pos $(seq 1 15)`
 # Expect 10 1 5 11 12 13 14 15

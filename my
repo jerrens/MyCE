@@ -1,7 +1,7 @@
 #!/bin/bash
 
 __Author="Jerren Saunders"
-__Version=24.11.12
+__Version=24.11.28
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -17,15 +17,17 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    ${__ScriptName} [-OPTIONS] [help | version | set | list [-l] | COMMAND [args...]]
-        set <cmd> <value>    Adds or updates the 'cmd' to the ${MY_CUSTOM_FILE} file in the current directory.
-                             This command should be run in the workspace root directory.
-                             The given command will be used whenever called from this level or a descendant.
+    ${__ScriptName} [OPTIONS] [help | version | set | list [-l] | KEY [args...]]
+
+        <KEY> [...args]     The key of the command to run
 
         list [-l]           List the available command keys.
                             Includemy he the '-l' arg to list one key per line.  Default is column view.
 
-        <COMMAND> [...args]  The command to run
+        set <key> <command>  Adds or updates the 'key' to the ${MY_CUSTOM_FILE} file in the current directory.
+                             The given command will be used whenever called from this level or a descendant.
+        
+        update [diff]       Update the script with the latest version.  If 'diff' is given, then show the changes
 
         help        Show usage
         version     Show version number
@@ -281,6 +283,7 @@ function process_ini_file() {
 
         # Check for section headers
         if [[ "$line" =~ ^\[.*\]$ ]]; then
+            log 2 "Section Header detected: ${line:1:-1}"
             section=${line:1:-1}
             continue
         fi
@@ -672,6 +675,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 24.11.28         Added 'help' output and additional log output
  - 24.11.12         Improvements to 'update' command handling.
                     Added 'update diff' command.
  - 24.11.8          Added 'update' command
