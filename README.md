@@ -231,9 +231,35 @@ my run   # Executes 'npm start'
 
 The command executed changes based on the directory you are in, as it reads the `.myCommand` file from that directory.
 
+## Enable TAB Command Completion
+
+The bash terminal offers a simple command completion feature using the TAB key while entering commands.
+To take advantage of this feature with MyCE, you'll need to perform the following steps.
+
+1. Copy the bash-completion/my file from this repo to `/etc/bash_completion.d/my`
+2. Enable the execute flag
+
+This can be done with the following commands (these will likely need to be run as `sudo`)
+
+```bash
+curl -o /etc/bash_completion.d/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/bash-completion/my
+chmod +x /etc/bash_completion.d/my
+```
+
+If you run `exec bash` after doing the above, your environment will be reloaded and you can check to see if the command completion is working by entering `my hel<TAB>`.
+If working, it should auto complete to `my help`.
+If it does not, you likely need to add one of the following to your `~/.bashrc` file to load the completion script when a session starts.
+
+`source /etc/bash_completion.d/my`
+
+to load the specific file, or to load all files in the `/etc/bash_completion.d` folder, you can add the line:
+
+`for f in /etc/bash_completion.d/*; do source "/etc/bash_completion.d/$f"; done`
+
+After adding one of those lines to `~/.bashrc`, save, then run `exec bash` and try again.
 
 
-## Troubleshooting
+<!-- ## Troubleshooting -->
 
 
 License
