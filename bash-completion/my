@@ -1,0 +1,59 @@
+#!/bin/bash
+# set -x
+
+# Place this file at: /etc/bash_completion.d/my
+# NOTE: Run the following commands with sudo level:
+# curl -o /etc/bash_completion.d/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/bash-completion/my
+# chmod +x /etc/bash_completion.d/my
+# exec bash
+# 
+# If not automatically loaded, add the following line to your .bashrc:
+# source /etc/bash_completion.d/my
+#   -- OR, to load all files in that directory, add the following line to your .bashrc:
+# for f in /etc/bash_completion.d/*; do source "/etc/bash_completion.d/$f"; done
+
+_my_autocomplete() {
+    _cmds=$(my list)
+
+    local cur
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    actions="list help version update set"
+
+    # echo "cur = ${cur}" >> ~/my-autocomplete.log
+
+    if ((COMP_CWORD == 1)); then
+        COMPREPLY=( $(compgen -W "${actions} ${_cmds}" -- "${cur}") )
+        # echo "  Reply ${COMPREPLY}" >> ~/my-autocomplete.log
+        return 0;
+    fi
+
+    if ((COMP_CWORD >= 2)); then
+        cur_action="${COMP_WORDS[1]}"
+
+        case "${cur_action}" in
+            list)
+                COMPREPLY=( $(compgen -W "-l" -- "${cur}") )
+                return 0;;
+            #set)
+                # Show available variables from the .myCommand files
+                #if ((COMP_CWORD >= 3)); then
+                #    COMPREPLY=( $(compgen -W "todo" == ${cur}) )
+                #fi
+                #return 0;;
+
+            help|verson|update)
+                # No other options expected
+                return 0;;
+
+            *)
+                return 0;;
+        esac
+    fi
+
+    COMPREPLY=( $(compgen -W "${_cmds}" -- "${cur}") )
+    return 0
+}
+
+# echo "Loading my autocomplete" >> ~/my-autocomplete.log
+complete -o default -F _my_autocomplete my
