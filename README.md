@@ -231,6 +231,7 @@ my run   # Executes 'npm start'
 
 The command executed changes based on the directory you are in, as it reads the `.myCommand` file from that directory.
 
+
 ## Enable TAB Command Completion
 
 The bash terminal offers a simple command completion feature using the TAB key while entering commands.
@@ -259,10 +260,20 @@ to load the specific file, or to load all files in the `/etc/bash_completion.d` 
 After adding one of those lines to `~/.bashrc`, save, then run `exec bash` and try again.
 
 
-<!-- ## Troubleshooting -->
+## Guide
+
+If you'd like to learn more about MyCE, an article can be found at <https://medium.com/@jerren/introduction-my-command-engine-myce-42e15028364a> that goes into details and provides some examples.
 
 
-License
+## Troubleshooting
+
+If you find a bug or have a suggestion on a feature to add to MyCE, please open a GitHub Issue, or better yet submit a PR for consideration.
+
+The Discussions page has been enabled on the repo as well. This is a good area to gauge interest in a feature idea with the community and also to share the command keys you’ve come up with for your .myCommand files and help others kick-start their setup.
+
+
+
+
+## License
+
 MIT License
-
-This README provides a comprehensive guide for users to install, configure, and use My Command Engine. For further assistance or contributions, feel free to open an issue or submit a pull request.
