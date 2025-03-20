@@ -23,7 +23,19 @@ confirm={ $confirm } && echo "Confirmed" || echo "Rejected"
 ```
 
 ```ini
-find=find ${PWD} -name "$1" 2>/dev/null
+[find]
+# Search the current directory and below for a file with the given pattern
+name=find ${PWD} -name "$1" 2>/dev/null
+
+# Search for the 10 largest files
+largest=find / -type f -exec du -h {} + 2>/dev/null | sort -rh | head -10
+# Biggest directory in the current directory
+bigdir=du -h --max-depth=1 ${PWD} 2>/dev/null | sort -hr
+
+# Most CPU intensive processes
+proc=ps -eo pcpu,pid:10,comm --sort=-pcpu | grep -v 'my$' | head -10
+# Most Memory intensive processes
+mem=ps -eo pmem,pid:10,comm --sort=-pmem | head -10
 ```
 
 ```ini
@@ -43,6 +55,8 @@ stop=systemctl stop
 restart=systemctl restart
 status=systemctl status
 list=systemctl list-unit-files --type=service -all
+alive=systemctl list-units --type=service --state=running
+dead=systemctl list-units --type=service --state=exited
 find=${service.list} | grep .*$1.*
 ```
 
@@ -57,5 +71,7 @@ cpu=command -v mpstat &> /dev/null && mpstat -P ALL | lscpu -e
 ```ini
 [port]
 who=ss -ltpn --no-header 'sport = :$1' | awk '{print \$6}'
+open=lsof -i -P -n | grep LISTEN
 probe=nc -z localhost $1 && echo "port open" || echo "port closed"
+ping=nc -zv $1 $2 2>&1 | grep "Connect"
 ```
