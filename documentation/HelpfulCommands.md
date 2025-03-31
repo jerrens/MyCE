@@ -70,7 +70,7 @@ find=${service.list} | grep .*$1.*
 [size]
 disk=df -h
 disk.color=df -h | awk 'NR==1; NR>1 {if ($5+0 > 90) print "\033[0;31m" $0 "\033[0m"; else if ($5+0 > 75) print "\033[33m" $0 "\033[0m"; else if ($5+0 > 50) print "\033[1;33m" $0 "\033[0m"; else print $0}'dir=du -sh *
-dir=du -sh *[^.]* * 2>/dev/null
+dir=du -sh -- $(find . -mindepth 1 -maxdepth 1 -type d) 2>/dev/null
 dir.sort=${size.dir} | sort -rh | head -10
 mem=command -v free &> /dev/null && free -h || lsmem
 cpu=command -v mpstat &> /dev/null && mpstat -P ALL | lscpu -e
