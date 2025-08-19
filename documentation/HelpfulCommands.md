@@ -22,6 +22,12 @@ confirm=read -rp "Are you sure? [Y/n] " -n 1 && echo && [[ $REPLY =~ ^[Yy]$ ]];
 confirm={ $confirm } && echo "Confirmed" || echo "Rejected"
 ```
 
+## File
+```ini
+[file]
+backup=echo cp "$1" "$1--$(date +%Y%m%d_%H%M%S).bkp"
+```
+
 ## Find
 ```ini
 [find]
@@ -39,16 +45,18 @@ proc=ps -eo pcpu,pid:10,comm --sort=-pcpu | grep -v 'my$' | head -10
 mem=ps -eo pmem,pid:10,comm --sort=-pmem | head -10
 ```
 
-## Date
+## Date/Time
 
 ```ini
-date=TZ="${TIMEZONE:-America/New_York}" date +"%F %X"
+time=TZ="${TIMEZONE:-America/New_York}" date +"%F %X"
 ```
 
 ## Session
 ```ini
 # Keeps an SSH session from closing
 hold=echo -ne "Holding the session open since\n  $(my date)\n  Press 'q' to resume...\n\n"; while true; do read -t 1 -n 1 -s keypress; if [[ $keypress == "q" ]]; then echo -e "\r\e[5A\e[J"; break; fi; ec$
+
+recon=uname -a; whoami; id; my ip;
 ```
 
 ## Services
@@ -78,9 +86,64 @@ cpu=command -v mpstat &> /dev/null && mpstat -P ALL | lscpu -e
 
 ## Network
 ```ini
+ip=ip -brief a
+
 [port]
 who=ss -ltpn --no-header 'sport = :$1' | awk '{print \$6}'
 open=lsof -i -P -n | grep LISTEN
 probe=nc -z localhost $1 && echo "port open" || echo "port closed"
 ping=nc -zv $1 $2 2>&1 | grep "Connect"
+```
+
+## Podman (Docker)
+```ini
+# These may be defined/overwritten in other directories
+POD_YAML=pod.yaml
+WORKSPACE_ROOT=$(dirname ${POD_YAML})
+
+WEB_CONTAINER=dev-pod-web
+MONGO_CONTAINER=dev-pod-mongodb
+
+[pod]
+attach=podman exec -ti $1 bash
+up=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube "${POD_YAML}" && popd > /dev/null
+up+=${pod.up} && sleep 3 && ${pod.ls}
+down=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube "${POD_YAML}" --down && popd > /dev/null
+down+=${pod.down} && sleep 3 && ${pod.ls}
+replace=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube "${POD_YAML}" --replace && popd > /dev/null
+replace+=${pod.replace} && sleep 3 && ${pod.ls}
+stats=podman stats --no-stream
+
+# Different forms of showing containers (simple, simple combo, verbose combo)
+ls=podman ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
+vol.ls=podman volume ls --format "table  {{.Driver}}  {{.Mountpoint}} {{.Name}}"
+ll=echo -e "Containters:\n-----------------------------------------" && ${pod.ls} && echo -e "\nVolumes:\n-----------------------------------------" && ${pod.vol.ls}
+la=echo -e "Containters:\n-----------------------------------------" && podman ps --all && echo -e "\nVolumes:\n-----------------------------------------" && ${pod.vol.ls}
+
+# Generic form (define in ~/)
+log=podman logs --follow --tail=50
+
+# Specific form (override in repo directory)
+log=podman logs $WEB_CONTAINER
+log+=podman logs --tail 100 --follow $WEB_CONTAINER
+
+
+# Interact with containers
+con=podman exec -it $WEB_CONTAINER bash
+xdebug.log=${pod.con} -c "tail --follow --lines=25 /tmp/xdebug.log"
+web.restart=podman restart $WEB_CONTAINER
+
+[pod.mongo]
+con=podman exec -it $MONGO_CONTAINER bash
+sh=podman exec --tty --interactive $MONGO_CONTAINER mongosh -u adminuser --port 27017
+
+
+# Launch Utilitie in a Container
+[mongo]
+con=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh bash
+sh=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongosh
+export=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongoexport
+restore=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongorestore
+dump=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongodump
+
 ```
