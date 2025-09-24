@@ -10,6 +10,7 @@ dir=echo "${REPO_ROOT}"
 stash.staged=git stash push --staged
 stash.unstaged=git stash push --keep-index
 stash.unstaged+=git stash push --keep-index --include-untracked
+dir.recon=for dir in */; do [ -d "${dir}.git" ] && (cd "$dir"; echo "$PWD $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short HEAD)"; cd ..); done | column -t -o "    "
 ```
 
 ## User Prompts
@@ -113,6 +114,8 @@ down+=${pod.down} && sleep 3 && ${pod.ls}
 replace=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube "${POD_YAML}" --replace && popd > /dev/null
 replace+=${pod.replace} && sleep 3 && ${pod.ls}
 stats=podman stats --no-stream
+link=ln -sfn $(realpath --relative-to="${HOME}/code/podman" ${REPO_ROOT}) ~/code/podman/repo-name
+checklink=ls -l ~/code/podman | awk '{if ($1 ~ /^l/) print $9 " -> " $11}'
 
 # Different forms of showing containers (simple, simple combo, verbose combo)
 ls=podman ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
@@ -145,5 +148,10 @@ sh=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt
 export=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongoexport
 restore=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongorestore
 dump=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongodump
+```
 
+## Python
+```ini
+[python]
+venv.create=python -m venv .venv && source .venv/bin/activate
 ```
