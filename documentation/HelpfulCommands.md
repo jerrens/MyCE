@@ -10,7 +10,7 @@ dir=echo "${REPO_ROOT}"
 stash.staged=git stash push --staged
 stash.unstaged=git stash push --keep-index
 stash.unstaged+=git stash push --keep-index --include-untracked
-dir.recon=for dir in */; do [ -d "${dir}.git" ] && (cd "$dir"; echo "$PWD $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short HEAD)"; cd ..); done | column -t -o "    "
+dir.recon=for dir in */; do [ -d "${dir}.git" ] && (cd "$dir"; echo "${dir%/} $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short HEAD) $(git branch --format='%(refname:short)' | paste -sd, )"; cd ..); done | column --table --output-separator "    " --table-columns "DIRECTORY,ACTIVE BRANCH,REVISION,LOCAL BRANCHES"
 ```
 
 ## User Prompts
