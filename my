@@ -1,7 +1,8 @@
 #!/bin/bash
+# spell-checker:words dzdo sdiff
 
 __Author="Jerren Saunders"
-__Version=24.11.28
+__Version=25.11.7
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -22,7 +23,9 @@ USAGE:
         <KEY> [...args]     The key of the command to run
 
         list [-l]           List the available command keys.
-                            Includemy he the '-l' arg to list one key per line.  Default is column view.
+                            Include the '-l' arg to list one key per line.  Default is column view.
+
+        definition <key>    Identifies the file(s) the given key exist in.
 
         set <key> <command>  Adds or updates the 'key' to the ${MY_CUSTOM_FILE} file in the current directory.
                              The given command will be used whenever called from this level or a descendant.
@@ -341,6 +344,10 @@ function load_my_custom_files() {
     # Always process the home dir file first (if it exists)
     if [ -f "${HOME}/${MY_CUSTOM_FILE}" ]; then
         file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
+
+        # This may cause a duplicate entry (if executed in a subdirectory of ~)
+        # If this re-orders the list, then consider using https://stackoverflow.com/a/54797762/2136313 method
+        file_paths=($(printf "%s\n" "${file_paths[@]}" | uniq))
     fi
 
     # Process the files in reverse order
@@ -438,6 +445,141 @@ function list_keys() {
         log 1 "No ${MY_CUSTOM_FILE} file was found in the current directory tree."
         return 1
     fi
+}
+
+# Reads an INI-style file and searches the valid sections and keys for a specific key
+#  All entries matching the given key will be stored in `foundDefs` array
+declare -a foundDefs=()
+function print_key_entries_in_file() {
+    local filePath=$1
+    local searchKey=$2
+    log 1 "Searching file: $1"
+
+    declare -a foundFileDefs=()
+    
+    local section=""
+    local lineNumber=0
+    OLD_IFS=$IFS
+    while IFS= read -r line <&3 || [[ -n "$line" ]]; do
+        ((lineNumber++))  # Increment line number
+        # echo " Line1 - $line"
+
+        # Skip empty lines and comments
+        if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+
+        # Check for section headers
+        if [[ "$line" =~ ^\[.*\]$ ]]; then
+            log 2 "    Section Header detected: ${line:1:-1}"
+            section=${line:1:-1}
+            continue
+        fi
+
+        # Split the line into key and value
+        IFS='=' read -r key value <<< "$line"
+        # echo "     2 - $line"
+
+        # Trim whitespace from key
+        key="${key#"${key%%[![:space:]]*}"}"   # remove leading whitespace characters
+        key="${key%"${key##*[![:space:]]}"}"   # remove trailing whitespace characters
+        value="${value#"${value%%[![:space:]]*}"}"   # remove leading whitespace characters
+        value="${value%"${value##*[![:space:]]}"}"   # remove trailing whitespace characters        
+        fullKey=$key
+        log 2 "      $key=$value"
+
+        # If section is not empty, prepend it to the key with an underscore
+        if [[ -n "$section" ]]; then
+            fullKey="${section}.${key}"
+            log 3 "        Full Key: ${fullKey}"
+        fi
+        
+        # If this key is the one we're searching for, collect it
+        if [[ "$searchKey" == "$fullKey" ]]; then
+            log 2 "  Key Match @$lineNumber: $fullKey - ($value)"
+            if [[ -n "$section" ]]; then
+                entry="$filePath:$lineNumber|[${section}]⇒ ${key}||${value}"
+                foundFileDefs+=("$entry")
+                foundDefs+=("$entry")
+            else
+            entry="$filePath:$lineNumber|${key}||${value}"
+                foundFileDefs+=("$entry")
+                foundDefs+=("$entry")
+            fi
+        fi
+    done 3< <(cat "$1")
+    log 2 "" # Add some spacing in extra verbose mode
+    IFS=$OLD_IFS
+
+    # After collecting all lines, print the contents as a table using column
+    if [[ -z ${foundFileDefs[@]} ]]; then
+        # Nothing found in this file
+        log 1 "  Nothing found\n"
+    else 
+        # Definition was found
+        for line in "${foundFileDefs[@]}"; do
+            # Replace any line wrap chars with an escaped version for the print
+            log 1 "|${line//\\n/\\\\n}"
+        done | column -t -s "|"
+        log 1 ""
+    fi
+}
+
+# Function to locate the given key from the ${MY_CUSTOM_FILE} files in the directory tree
+function get_key_definition() {
+    local defKey=$1
+    shift
+
+    # NOTE: Uses the same logic to traverse the directory tree for command files,
+    #   but looks for any occurrence of the key instead of the typical LIFO processing
+
+    # Start in the current directory and move up the directory tree
+    declare -a file_paths
+    dir=$(pwd)
+
+    # Find all files in the directory tree
+    while [ "$dir" != "/" ]; do
+        if [[ -f "$dir/${MY_CUSTOM_FILE}" ]]; then
+            file_paths+=("$dir/${MY_CUSTOM_FILE}")
+        fi
+        dir=$(dirname "$dir")
+    done
+
+    # Always process the home dir file first (if it exists)
+    if [ -f "${HOME}/${MY_CUSTOM_FILE}" ]; then
+        file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
+
+        # This may cause a duplicate entry (if executed in a subdirectory of ~)
+        # If this re-orders the list, then consider using https://stackoverflow.com/a/54797762/2136313 method
+        file_paths=($(printf "%s\n" "${file_paths[@]}" | uniq))
+    fi
+
+    # Process the files in reverse order
+    for (( idx=${#file_paths[@]}-1 ; idx>=0 ; idx-- )) ; do
+        print_key_entries_in_file "${file_paths[idx]}" "$defKey"
+    done
+
+    if [[ -z ${file_paths[0]} ]]; then
+        log 0 "No ${MY_CUSTOM_FILE} files were found in the directory tree"
+        return 1
+    fi
+
+    # After collecting all lines, print the contents as a table using column
+    if [[ -z ${foundDefs[@]} ]]; then
+        log 1 "  Not found\n"
+    else 
+        log 1 "Definitions Found:\n$(printf '%*s' 100 | tr ' ' '-')"
+        for line in "${foundDefs[@]}"; do
+            # Replace any line wrap chars with an escaped version for the print
+            log 0 "${line//\\n/\\\\n}"
+        done | column -t -s "|" 
+    fi
+
+    log 1 "\n\e[3m** NOTE: If multiple definitions were found, the last definition shown is used\e[0m\n"
+
+    log 2 "" # Add spacing in verbose mode
+    return 0
+
 }
 
 # Builds a merged version of the ${MY_CUSTOM_FILE} files in the directory tree
@@ -654,6 +796,12 @@ function main() {
             exit 0
             ;;
 
+        definition)
+            shift
+            get_key_definition "$@"
+            exit 0
+            ;;
+
         update)
             update_script "$@";;
 
@@ -675,6 +823,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 25.11.7          Added `definition <key>` command; Removed duplicate processing of .myCommand in user's home directory
  - 24.11.28         Added 'help' output and additional log output
  - 24.11.12         Improvements to 'update' command handling.
                     Added 'update diff' command.
