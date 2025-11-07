@@ -43,11 +43,12 @@ _my_autocomplete() {
 
         case "${cur_action}" in
             definition)
-                COMPREPLY=( $(compgen -W "${_cmds}" -- "${cur}") )
+                _all_cmds=$(my list -a)
+                COMPREPLY=( $(compgen -W "${_all_cmds}" -- "${cur}") )
                 return 0;;
 
             list)
-                COMPREPLY=( $(compgen -W "-l" -- "${cur}") )
+                COMPREPLY=( $(compgen -W "-l -a" -- "${cur}") )
                 return 0;;
             #set)
                 # Show available variables from the .myCommand files
