@@ -22,8 +22,9 @@ USAGE:
 
         <KEY> [...args]     The key of the command to run
 
-        list [-l]           List the available command keys.
+        list [-l] [-a]      List the available command keys.
                             Include the '-l' arg to list one key per line.  Default is column view.
+                            Include the '-a' arg to include variables (uppercase)
 
         definition <key>    Identifies the file(s) the given key exist in.
 
@@ -428,11 +429,23 @@ function set_key_value() {
 function list_keys() {
     local -r indent="    "
     local use_column=true
+    local include_const=false
 
-    # Check for -l argument
-    if [[ "$1" == "-l" ]]; then
-        use_column=false
-    fi
+    # Check for args
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            "-l")
+                use_column=false;;
+
+            "-a")
+                include_const=true;;
+
+            *)
+                log 0 "Unknown argument: $1\n";;
+        esac
+
+        shift    
+    done
 
     if load_my_custom_files; then
         log 0 "The following commands are available:"
@@ -441,10 +454,17 @@ function list_keys() {
             COLUMN_ARG="-c ${COLUMN_WIDTH}"
         fi
 
+        if [[ $include_const ]]; then
+            echo "Including Vars"
+            keyPattern='^[a-zA-Z]'
+        else 
+            keyPattern='^[a-z]'
+        fi
+
         if [[ "$use_column" == true ]]; then
-            printf "%s\n" "${!commands[@]}" | grep '^[a-z]' | sort | column ${COLUMN_ARG}
+            printf "%s\n" "${!commands[@]}" | grep "${keyPattern}" | sort | column ${COLUMN_ARG}
         else
-            printf "%s\n" "${!commands[@]}" | grep '^[a-z]' | sort | sed "s/^/${indent}/"
+            printf "%s\n" "${!commands[@]}" | grep "${keyPattern}" | sort | sed "s/^/${indent}/"
         fi
 
     else
@@ -833,6 +853,7 @@ exit $?
                     Removed duplicate processing of .myCommand in user's home directory
                     Dry-run output now escapes \n instead of interpretting as a new line
                     Added COLUMN_WIDTH variable to reduce column width when printing list
+                    Added `-a` option to `list` command to include variables in output (for auto-complete)
  - 24.11.28         Added 'help' output and additional log output
  - 24.11.12         Improvements to 'update' command handling.
                     Added 'update diff' command.
