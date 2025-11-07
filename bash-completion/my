@@ -18,7 +18,7 @@ _my_autocomplete() {
     local cur
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    actions="list help version update set"
+    actions="definition list help version update set"
 
     # echo "cur = ${cur}" >> ~/my-autocomplete.log
 
@@ -29,9 +29,23 @@ _my_autocomplete() {
     fi
 
     if ((COMP_CWORD >= 2)); then
+        # If the first word is the option for a dryrun, then remove it
+        if [[ "${COMP_WORDS[1]}" == "-d" ]]; then
+            # echo -e "\nRemoving dryrun option from COMP_WORDS: Was - ${COMP_WORDS[@]}"
+            unset 'COMP_WORDS[1]'
+            COMP_WORDS=("${COMP_WORDS[@]}") # Reindex the array
+            # echo -e "\nNow - ${COMP_WORDS[@]}\n"
+        fi
+
         cur_action="${COMP_WORDS[1]}"
 
+	# echo -e "\n  Action: ${cur_action}; CUR: ${cur}"
+
         case "${cur_action}" in
+            definition)
+                COMPREPLY=( $(compgen -W "${_cmds}" -- "${cur}") )
+                return 0;;
+
             list)
                 COMPREPLY=( $(compgen -W "-l" -- "${cur}") )
                 return 0;;
@@ -47,6 +61,8 @@ _my_autocomplete() {
                 return 0;;
 
             *)
+                COMPREPLY=( $(compgen -W "${_cmds}" -- "${cur}") )
+                # echo "  Reply ${COMPREPLY}" >> ~/my-autocomplete.log
                 return 0;;
         esac
     fi
