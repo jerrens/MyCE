@@ -62,6 +62,7 @@ EOT
 VERBOSE=0
 DRYRUN=false
 MY_CUSTOM_FILE=.myCommand
+COLUMN_WIDTH=120 # If undefined, then the full terminal width will be used
 
 # Prints log message to the terminal
 #  <int> lvl - Print Level: Only print this message if the VERBOSE level is greater than or equal to this
@@ -93,7 +94,9 @@ shift $((OPTIND -1)) # Remaining args will be left
 #  <cmd> cmd - Command to execute or print
 function runCMD() {
     if [[ "${DRYRUN}" == "true" ]]; then
-        log 0 "CMD: $*"
+        # Replace any line wrap chars with an escaped version for the print
+        dryCMD="CMD: $*"
+        log 0 "${dryCMD//\\n/\\\\n}"
     else
         eval "$*"
     fi
@@ -434,9 +437,12 @@ function list_keys() {
     if load_my_custom_files; then
         log 0 "The following commands are available:"
 
+        if [ -v COLUMN_WIDTH ]; then
+            COLUMN_ARG="-c ${COLUMN_WIDTH}"
+        fi
+
         if [[ "$use_column" == true ]]; then
-            # Consider adding `-c 120` arg to `column` command
-            printf "%s\n" "${!commands[@]}" | grep '^[a-z]' | sort | column
+            printf "%s\n" "${!commands[@]}" | grep '^[a-z]' | sort | column ${COLUMN_ARG}
         else
             printf "%s\n" "${!commands[@]}" | grep '^[a-z]' | sort | sed "s/^/${indent}/"
         fi
@@ -823,7 +829,10 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
- - 25.11.7          Added `definition <key>` command; Removed duplicate processing of .myCommand in user's home directory
+ - 25.11.7          Added `definition <key>` command
+                    Removed duplicate processing of .myCommand in user's home directory
+                    Dry-run output now escapes \n instead of interpretting as a new line
+                    Added COLUMN_WIDTH variable to reduce column width when printing list
  - 24.11.28         Added 'help' output and additional log output
  - 24.11.12         Improvements to 'update' command handling.
                     Added 'update diff' command.
