@@ -455,7 +455,7 @@ function list_keys() {
         fi
 
         if [[ $include_const ]]; then
-            echo "Including Vars"
+            log 1 "Including Vars"
             keyPattern='^[a-zA-Z]'
         else 
             keyPattern='^[a-z]'
