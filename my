@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff
 
 __Author="Jerren Saunders"
-__Version=25.11.7
+__Version=25.12.9
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -633,15 +633,21 @@ function find_and_run_cmd() {
             arg=${args[$i-1]}
             log 3 "i is ${i}, arg is ${arg}"
 
-            if [[ "$binary_cmd" =~ [^\\]\$\{?(${i})\}? ]]; then
+            # Updated regex pattern to match: `$1`, `${1}`, and `${1:-Hello}` patterns
+            # if [[ "$binary_cmd" =~ [^\\]\$\{?([0-9]+)([^}\"]*\}?)? ]]; then
+            if [[ "$binary_cmd" =~ [^\\](\$\{?([0-9]+)([^}\"]*\}?)?) ]]; then
+                log 1 "Positional Argument Match Results - [0]='${BASH_REMATCH[0]}'; [1]='${BASH_REMATCH[1]}'; [2]='${BASH_REMATCH[2]}'"
                 # Record this max reference so we know how much to shift
-                if [ "${BASH_REMATCH[1]}" -gt "$max_arg_num" ]; then
-                    max_arg_num=${BASH_REMATCH[1]}
+                if [ "${BASH_REMATCH[2]}" -gt "$max_arg_num" ]; then
+                    max_arg_num=${BASH_REMATCH[2]}
                     log 3 "Highest positional arg found at $max_arg_num"
                 fi
 
-                log 2 "Replacing positional argument reference '\$${BASH_REMATCH[1]}' with '${arg}'"
-                binary_cmd=${binary_cmd//\$${BASH_REMATCH[1]}/$arg}
+                log 2 "Replacing positional argument reference '${BASH_REMATCH[1]}' with '${arg}'"
+
+                # Check if there is a default value part like {$1:-DefaultVal}
+                binary_cmd=${binary_cmd//${BASH_REMATCH[1]}/$arg}
+                
                 log 2 "    New:  $binary_cmd"
             fi
         done
@@ -654,34 +660,39 @@ function find_and_run_cmd() {
         fi
 
         local loopCount=0
-        while [[ "$binary_cmd" =~ (^|[^\\])(\$\{([a-zA-Z_][^}]*)\}|\$([a-zA-Z_][a-zA-Z_0-9]*)) ]]; do
-            log 3 "Variable Reference Match Results - ${BASH_REMATCH[1]}; ${BASH_REMATCH[2]}; ${BASH_REMATCH[3]}; ${BASH_REMATCH[4]}"
+        # Look for variable references in the command
+        #  - Matches ${VAR_NAME}, ${VAR_NAME:-default}, or $VAR_NAME patterns
+        #  - Excludes those startign with an escaped dollar signs (\$)
+        # while [[ "$binary_cmd" =~ (^|[^\\])(\$\{([a-zA-Z_][^}]*)\}|\$([a-zA-Z_][a-zA-Z_0-9]*)) ]]; do
+        while [[ "$binary_cmd" =~ (^|[^\\])(\$([a-zA-Z_]+|\{([a-zA-Z][^:}]+)(:[^}]+)?\}?)) ]]; do
+            log 3 "Variable Reference Match Results - [1]='${BASH_REMATCH[1]}'; [2]='${BASH_REMATCH[2]}'; [3]='${BASH_REMATCH[3]}'; [4]='${BASH_REMATCH[4]}'"
 
-            if [[ -n ${BASH_REMATCH[3]} ]]; then
+            slug="${BASH_REMATCH[2]}"
+                
+            if [[ -n ${BASH_REMATCH[4]} ]]; then
                 # If the variable is surrounded by {}, it starts with [a-zA-Z_] and includes any character except for }
-                var_name=${BASH_REMATCH[3]}
-                slug="\${${var_name}}"
+                var_name=${BASH_REMATCH[4]}
                 log 3 "      Found variable inside curly brackets: ${var_name}"
 
             else
                 # If the variable is not surrounded by {}, it follows the more restrictive pattern
-                var_name=${BASH_REMATCH[4]}
-                slug="\$${var_name}"
+                var_name=${BASH_REMATCH[3]}
                 log 3 "      Found variable: ${var_name}"
             fi
 
             # Get the value of the variable from the loaded commands
-            log 2 "    Trying to replace variable: $var_name"
+            log 2 "    Trying to replace '$slug' with variable: $var_name"
             if findKey "$var_name"; then
                 log 2 "    Found key: $foundKey_value"
                 # Substitute the variable in the binary_cmd
-                binary_cmd=${binary_cmd//$slug/$foundKey_value}
+                binary_cmd=${binary_cmd/$slug/$foundKey_value}
             else
                 log 1 "The referenced variable ($slug) was not defined! Passing through to eval"
                 # Escape it to pass on to eval later
-                binary_cmd=${binary_cmd//$slug/\\$slug}
-                log 2 "    New:  $binary_cmd"
+                binary_cmd=${binary_cmd/$slug/\\$slug}
             fi
+              
+            log 2 "    New:  $binary_cmd"            
 
             # Avoid an infinite loop
             ((loopCount++))
@@ -849,6 +860,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 25.12.9          Added support for default values in variable references (e.g., ${VAR_NAME:-default})
  - 25.11.7          Added `definition <key>` command
                     Removed duplicate processing of .myCommand in user's home directory
                     Dry-run output now escapes \n instead of interpretting as a new line
