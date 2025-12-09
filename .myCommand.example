@@ -7,6 +7,7 @@ LAST_CONTAINER=podman exec -til
 FLASK_CONTAINER=podman exec -it pod-flask
 MONGO_CONTAINER_NAME=pod-mongodb
 CONTAINER_NAME=container-name
+CONST="lvl_3"
 # END REGION: Variables
 
 # REGION: Commands
@@ -46,3 +47,32 @@ confirm={ $_confirm } && echo "yes" || echo "no"
 # Run this test with `my test.pos $(seq 1 15)`
 # Expect 10 1 5 11 12 13 14 15
 pos=echo $10 $1 $5 \$8
+
+
+sub1=echo $1
+sub2=echo "$1"
+sub3=echo "${1}"
+sub4=echo ${1}
+
+subdef1=echo ${1:-def}
+subdef2=echo "${1:-def}"
+subdef3=echo "${1:-def} ${2:-ALT}"
+
+var1=echo ${CONST}
+var2=echo $CONST
+var3=echo ${CONST:-default}
+
+env1=echo $HOME
+env2=echo ${HOME}
+env3=echo "${HOME}"
+env4=echo "${HOME:-/default/home}"
+
+unk1=echo $UNKNOWN
+unk2=echo ${UNKNOWN}
+unk3=echo "${UNKNOWN:-default}"
+
+esc1=echo "\$CONST"
+esc2=echo \${CONST}
+esc3=echo \${CONST:-default}
+esc4=echo \${1}
+esc5=echo "\${1:-def} ${2:-ALT}"
