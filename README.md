@@ -30,6 +30,7 @@ This tool is ideal for developers who frequently switch between projects or envi
 - **Merged Configurations**: Reads `.myCommand` files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
 - **Sectioned Commands**: Uses INI-style sections in `.myCommand` files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
 - **Positional Args**: Values within the `.myCommand` file can use positional argument references (ie $1, $2, ${3})
+- **Default Variable Values**: Default values for variables may be set using the following syntax: ${1:-defaultValue} or ${CONST:-defaultValue}
 
 ```ini
 [server]
