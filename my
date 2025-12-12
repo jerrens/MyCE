@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff
 
 __Author="Jerren Saunders"
-__Version=25.12.9
+__Version=25.12.10
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -689,7 +689,19 @@ function find_and_run_cmd() {
             else
                 log 1 "The referenced variable ($slug) was not defined! Passing through to eval"
                 # Escape it to pass on to eval later
+
+                # Protect any existing escaped instances of this variable \$PATTERN with a temporary placeholder
+                local temp_placeholder="__TEMP_ESCAPED_$((RANDOM))__"
+                binary_cmd="${binary_cmd//\\$slug/$temp_placeholder}"
+                log 3 "    Ignore Escaped:   $binary_cmd"
+
+                # Now replace only the unescaped instances
                 binary_cmd=${binary_cmd/$slug/\\$slug}
+                log 3 "    Update Refs:       $binary_cmd"
+
+                # Restore the escaped version
+                binary_cmd="${binary_cmd//$temp_placeholder/\\$slug}"                
+                log 3 "    Restore Previous:  $binary_cmd"
             fi
               
             log 2 "    New:  $binary_cmd"            
@@ -860,6 +872,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 25.12.10         BugFix: Infinite loop possible when an expanded reference contains a variable that was already expanded
  - 25.12.9          Added support for default values in variable references (e.g., ${VAR_NAME:-default})
  - 25.11.7          Added `definition <key>` command
                     Removed duplicate processing of .myCommand in user's home directory
