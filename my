@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff
 
 __Author="Jerren Saunders"
-__Version=25.12.10
+__Version=25.12.18
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -98,9 +98,15 @@ function runCMD() {
         # Replace any line wrap chars with an escaped version for the print
         dryCMD="CMD: $*"
         log 0 "${dryCMD//\\n/\\\\n}"
-    else
-        eval "$*"
+        return
     fi
+
+    local cmd_string=$1
+    shift
+    local -a full_cmd=( "$cmd_string" "$@" )
+
+    log 3 "Executing: ${full_cmd[*]}"
+    eval "${full_cmd[@]}"
 }
 
 # Function to add or update a key-value pair in an INI file
@@ -634,8 +640,7 @@ function find_and_run_cmd() {
             log 3 "i is ${i}, arg is ${arg}"
 
             # Updated regex pattern to match: `$1`, `${1}`, and `${1:-Hello}` patterns
-            # if [[ "$binary_cmd" =~ [^\\]\$\{?([0-9]+)([^}\"]*\}?)? ]]; then
-            if [[ "$binary_cmd" =~ [^\\](\$\{?([0-9]+)([^}\"]*\}?)?) ]]; then
+            if [[ "$binary_cmd" =~ [^\\](\$\{?($i)(}|:-[^}\"]*\}?)?) ]]; then
                 log 1 "Positional Argument Match Results - [0]='${BASH_REMATCH[0]}'; [1]='${BASH_REMATCH[1]}'; [2]='${BASH_REMATCH[2]}'"
                 # Record this max reference so we know how much to shift
                 if [ "${BASH_REMATCH[2]}" -gt "$max_arg_num" ]; then
@@ -649,6 +654,8 @@ function find_and_run_cmd() {
                 binary_cmd=${binary_cmd//${BASH_REMATCH[1]}/$arg}
                 
                 log 2 "    New:  $binary_cmd"
+            else
+                log 3 "No positional arg reference found for arg $i"
             fi
         done
 
@@ -658,6 +665,9 @@ function find_and_run_cmd() {
             log 3 "Shifting args by $max_arg_num"
             shift "$max_arg_num"
         fi
+
+        log 3 "Remaining arguments: $*"
+        log 3 "Current evolution of command: $binary_cmd"
 
         local loopCount=0
         # Look for variable references in the command
@@ -872,6 +882,8 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 25.12.18         BugFix: Nested substitutions not handled correctly
+                    BugFix: Positional arguments not handled correctly
  - 25.12.10         BugFix: Infinite loop possible when an expanded reference contains a variable that was already expanded
  - 25.12.9          Added support for default values in variable references (e.g., ${VAR_NAME:-default})
  - 25.11.7          Added `definition <key>` command
