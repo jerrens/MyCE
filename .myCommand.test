@@ -1,0 +1,56 @@
+CONST="foo"
+BIN_ROOT=/bin
+
+tmp=echo ~/code/.myCommand
+echo_bin=$BIN_ROOT/echo
+
+[section]
+tmp=echo "hello"
+
+[test]
+sub1=echo $1
+sub2=echo "$1"
+sub3=echo "${1}"
+sub4=echo ${1}
+
+subdef1=echo ${1:-def}
+subdef2=echo "${1:-def}"
+subdef3=echo "${1:-def} ${2:-ALT}"
+subdef4=echo "${2:-def} ${1:-ALT}"
+
+var1=echo ${CONST}
+var2=echo $CONST
+var3=echo ${CONST:-default}
+
+env1=echo $HOME
+env2=echo ${HOME}
+env3=echo "${HOME}"
+env4=echo "${HOME:-/default/home}"
+
+unk1=echo $UNKNOWN
+unk2=echo ${UNKNOWN}
+unk3=echo "${UNKNOWN:-default}"
+
+esc1=echo "\$CONST"
+esc2=echo \${CONST}
+esc3=echo \${CONST:-default}
+esc4=echo \${1}
+esc5=echo "\${1:-def} ${2:-ALT}"
+
+# Run these test with `my test.pos $(seq 1 15)`
+# Expect 10 1 5 11 12 13 14 15
+pos=echo $10 $1 $5 \$8
+
+# Expect all values to be printed in order, 1..15 (those not explicitely referenced will be appended)
+dblpos1=echo $1 $2 $3 $4 $5 $6 $7 $8 $9 $10 $11 $12
+
+# Expect even numbers to be printed, with 15 being appended at the end
+dblpos2=echo $2 $4 $6 $8 $10 $12 $14
+
+# Expect reversed order (15..10) to be printed, then odd numbers.
+# Since $15 is explicitly referenced, all lower positional arguments not referenced ($2, $4, etc) will be dropped
+dblpos3=echo $15 $14 $13 $12 $11 $10 - $1 $3 $5 $7 $9
+
+[test.nested]
+sub=echo "Testing Nested Subst" && ${echo_bin} -e "\033[31m$1!\033[0m" "Other ${2:-Undefined}"
+
