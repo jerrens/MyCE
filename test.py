@@ -25,9 +25,9 @@ test_cases = {
     "test.subdef1 Alice": "^Alice$",
     "test.subdef2": "^def$",
     "test.subdef2 Bob": "^Bob$",
-    "test.subdef3": "^def ALT$", # FIXME: This test is currently failing
+    "test.subdef3": "^def ALT$",
     "test.subdef3 Charlie Delta": "^Charlie Delta$",
-    "test.subdef4": "^def ALT$", # FIXME: This test is currently failing
+    "test.subdef4": "^def ALT$",
     "test.subdef4 Eve Frank": "^Frank Eve$",
 
     "test.var1": "^foo$",
