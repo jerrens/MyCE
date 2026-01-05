@@ -7,6 +7,7 @@
     }
 }
 -->
+<!-- spell-checker:ignore Myce sdiff -->
 <div align="center"><img style="max-width: 450px;" src="./logo/Myce - Blue.png" alt="MyCE Logo"></div>
 
 # My Command Engine (MyCE)
@@ -14,23 +15,10 @@
 
 ## Overview
 
-My Command Engine or MyCE (as in "Mice") is a powerful, context-aware command-line tool, written intirely in bash, and designed to streamline project workflows by utilizing custom command definitions stored in `.myCommand` files within the directory tree.
-It searches for `.myCommand` files from the root down to the current directory, merging commands to create a localized and context-sensitive command set.
-The `~/.myCommand` file will always be processed first, even if not executed within your $HOME directory
+My Command Engine or MyCE (as in "Mice") is a powerful, context-aware command-line tool, written intirely in bash, and designed to streamline project workflows by utilizing custom command definitions stored in `.myCommands` files within the directory tree.
+It searches for `.myCommands` files from the root down to the current directory, merging commands to create a localized and context-sensitive command set.
+The `~/.myCommands` file will always be processed first, even if not executed within your $HOME directory.
 This tool is ideal for developers who frequently switch between projects or environments and need specific commands scoped to each context.
-
-
-
-## Features
-
-- **Context-Aware Commands**: Executes commands based on the `.myCommand` file located in the current directory or its parent directories.
-- **Scoped Command Aliases**: Each directory (or project) can define its own command aliases without impacting other directories.
-- **Ease of Use**: A simple command `my <key>` is all you need to invoke the corresponding full command defined in the `.myCommand` file.
-- **Recursive Lookup**: If a `.myCommand` file is not found in the current directory, the script searches parent directories until one is found.
-- **Merged Configurations**: Reads `.myCommand` files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
-- **Sectioned Commands**: Uses INI-style sections in `.myCommand` files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
-- **Positional Args**: Values within the `.myCommand` file can use positional argument references (ie $1, $2, ${3})
-- **Default Variable Values**: Default values for variables may be set using the following syntax: ${1:-defaultValue} or ${CONST:-defaultValue}
 
 ```ini
 [server]
@@ -40,19 +28,30 @@ stop="docker-compose down"
 
 Running `my server.start` will execute docker-compose up.
 
+
+## Features
+
+- **Context-Aware Commands**: Executes commands based on the `.myCommands` file located in the current directory or its parent directories.
+- **Scoped Command Aliases**: Each directory (or project) can define its own command aliases without impacting other directories.
+- **Ease of Use**: A simple command `my <key>` is all you need to invoke the corresponding full command defined in the `.myCommands` file.
+- **Recursive Lookup**: If a `.myCommands` file is not found in the current directory, the script searches parent directories until one is found.
+- **Merged Configurations**: Reads `.myCommands` files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
+- **Sectioned Commands**: Uses INI-style sections in `.myCommands` files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
+- **Positional Args**: Values within the `.myCommands` file can use positional argument references (ie $1, $2, ${3})
+- **Default Variable Values**: Default values for variables may be set using the following syntax: `${1:-defaultValue}` or `${CONST:-defaultValue}`
 - **Argument Passing**: Additional arguments provided after the command alias are passed directly to the underlying command. This enables dynamic behavior and flexible command usage.
-- **Fallback to Shell**: If the requested alias is not found in the merged `.myCommand` configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
-- **Cross-Domain Commands with Variables**: Commands can reference variables set in different `.myCommand` files, allowing for reusable, high-level command configurations across directories. This feature is useful for defining generic commands in higher-level folders and reusing them in specific contexts within the workspace.
+- **Fallback to Shell**: If the requested alias is not found in the merged `.myCommands` configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
+- **Cross-Domain Commands with Variables**: Commands can reference variables set in different `.myCommands` files, allowing for reusable, high-level command configurations across directories. This feature is useful for defining generic commands in higher-level folders and reusing them in specific contexts within the workspace.
 
 
 
 ## Usage
 
-### Basic Structure of `.myCommand` File
+### Basic Structure of `.myCommands` File
 
-The `.myCommand` files uses INI-style sections to allow optional grouping, and key-value pairs where each key is an alias for a command, and the value is the corresponding command.
+The `.myCommands` files uses INI-style sections to allow optional grouping, and key-value pairs where each key is an alias for a command, and the value is the corresponding command.
 
-Example `.myCommand` file:
+Example `.myCommands` file:
 
 ```ini
 # Variables
@@ -70,9 +69,9 @@ restore=podman exec --interactive --tty --rm $DB_CONTAINER mongorestore
 
 ### Running the my Script
 
-Create a `.myCommand` file in the root of your project or any directory where you want to define custom commands.
+Create a `.myCommands` file in the root of your project or any directory where you want to define custom commands.
 Run the `my` script followed by the *alias* you want to execute, and any additional arguments you may want to pass.
-For example, if you're in a directory with the previous `.myCommand` file:
+For example, if you're in a directory with the previous `.myCommands` file:
 
 ```bash
 # Usage:
@@ -88,7 +87,7 @@ my db.backup --gzip
 ### Arguments
 
 The `my` script has the following internal commands.
-These commands take priority over any keys or aliases of the same name that are defined in any `.myCommand` files, ***so consider them reserved keywords.***
+These commands take priority over any keys or aliases of the same name that are defined in any `.myCommands` files, ***so consider them reserved keywords.***
 
 `help`:
 Don't worry if you forget the basics.  
@@ -100,7 +99,7 @@ Just run `my version` and compare against the latest version on [GitHub](https:/
 
 `set <cmd> <value>`:
 **Experimental!**
-This command may be used to add a new value to the `.myCommand` file in the current directory.
+This command may be used to add a new value to the `.myCommands` file in the current directory.
 The first argument is the key/alias, all remaining arguments will be treated as the value.
 If the command should belong inside an INI section, then use a '.' to separate group from the key.
 For example:
@@ -147,7 +146,7 @@ Three levels is currently the most verbosity used in log prints, but if you get 
 Example: `my -vv build`
 
 `-d`:
-Curious how your `.myCommand` entries will expand, but not brave enough to just try?
+Curious how your `.myCommands` entries will expand, but not brave enough to just try?
 A dry run can be enabled by using the `-d` option.
 In dry run mode, the expanded command will be printed, but not executed
 
@@ -157,8 +156,8 @@ Example: `my -d build`
 ## Command Lookup Process
 
 1. **Merging and Overriding**:
-    The script starts at the root directory, working down to the current directory (pwd), merging any `.myCommand` files found along the way.
-    Commands defined in `.myCommand` files closer to the current directory override duplicates from higher-level directories.
+    The script starts at the root directory, working down to the current directory (pwd), merging any `.myCommands` files found along the way.
+    Commands defined in `.myCommands` files closer to the current directory override duplicates from higher-level directories.
     This makes the command engine adaptable for different projects without the need for globally defined aliases.
 
 2. **Sectioned Access**:
@@ -169,7 +168,7 @@ Example: `my -d build`
 
 ### Handling Variables Across Directories
 
-Variables can be set in `.myCommand` files at any directory level and accessed by commands in lower directories, allowing for flexible and reusable configurations.
+Variables can be set in `.myCommands` files at any directory level and accessed by commands in lower directories, allowing for flexible and reusable configurations.
 
 
 
@@ -187,30 +186,47 @@ Variables can be set in `.myCommand` files at any directory level and accessed b
     ```
 
 
-1. **Create `.myCommand` files**:
-    Add a `.myCommand` file in the root directories of your projects.
+1. **Create `.myCommands` files**:
+    Add a `.myCommands` file in the root directories of your projects.
 
-    A sample is available at <https://github.com/jerrens/MyCE/blob/main/.myCommand.example>
+    A sample is available at <https://github.com/jerrens/MyCE/blob/main/.myCommands.example>
 
-**Optional**: You can add my to your .bashrc or .zshrc if you prefer:
+**Optional**: You can add my to your `.bashrc` or `.zshrc` if you prefer:
 
 ```bash
 alias my='/path/to/my'
 ```
 
 
+## Environment Variables
+
+Optional environment variables may be defined to override default values for MyCE.
+These variables should be set for the current session by using `export <VARIABLE>=<VALUE>`
+or permanently by defining in `.bashrc` or `.zshrc`.
+
+### MYCE_FILE_NAME
+
+By default, MyCE will load command definitions from `.myCommands` files in the current directory tree.  
+Set the value of this variable to the desired file name if you wish to override the file name used.
+
+### MYCE_COLUMN_WIDTH
+
+By default, the `list` action will use a column width of 120 when printing aliases.
+Set the value of this variable to the desired width, or to `FULL` to use the full terminal width.
+
+
 ## Example Workflow
 
-You have two repositories, Repo1 and Repo2, both with their own `.myCommand` files.
+You have two repositories, Repo1 and Repo2, both with their own `.myCommands` files.
 
 ```ini
-# Repo1's `.myCommand` file:
+# Repo1's `.myCommands` file:
 build="mvn clean package"
 run="java -jar target/app.jar"
 ```
 
 ```ini
-# Repo2's `.myCommand` file:
+# Repo2's `.myCommands` file:
 
 build="npm run build"
 run="npm start"
@@ -230,7 +246,7 @@ my build   # Executes 'npm run build'
 my run   # Executes 'npm start'
 ```
 
-The command executed changes based on the directory you are in, as it reads the `.myCommand` file from that directory.
+The command executed changes based on the directory you are in, as it reads the `.myCommands` file from that directory.
 
 
 ## Enable TAB Command Completion
@@ -270,7 +286,7 @@ If you'd like to learn more about MyCE, an article can be found at <https://medi
 
 If you find a bug or have a suggestion on a feature to add to MyCE, please open a GitHub Issue, or better yet submit a PR for consideration.
 
-The Discussions page has been enabled on the repo as well. This is a good area to gauge interest in a feature idea with the community and also to share the command keys you’ve come up with for your .myCommand files and help others kick-start their setup.
+The Discussions page has been enabled on the repo as well. This is a good area to gauge interest in a feature idea with the community and also to share the command keys you’ve come up with for your .myCommands files and help others kick-start their setup.
 
 
 

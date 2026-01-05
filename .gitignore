@@ -1,2 +1,5 @@
 .myCommand
 !.myCommand.example
+.myCommands
+!.myCommands.example
+settings.json
