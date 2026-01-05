@@ -1,8 +1,8 @@
 #!/bin/bash
-# spell-checker:words dzdo sdiff
+# spell-checker:words dzdo sdiff MyCE
 
 __Author="Jerren Saunders"
-__Version=25.12.18
+__Version=26.1.5
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -28,7 +28,7 @@ USAGE:
 
         definition <key>    Identifies the file(s) the given key exist in.
 
-        set <key> <command>  Adds or updates the 'key' to the ${MY_CUSTOM_FILE} file in the current directory.
+        set <key> <command>  Adds or updates the 'key' to the '${MY_CUSTOM_FILE}' file in the current directory.
                              The given command will be used whenever called from this level or a descendant.
         
         update [diff]       Update the script with the latest version.  If 'diff' is given, then show the changes
@@ -62,8 +62,14 @@ EOT
 # Default Settings
 VERBOSE=0
 DRYRUN=false
-MY_CUSTOM_FILE=.myCommand
-COLUMN_WIDTH=120 # If undefined, then the full terminal width will be used
+MY_CUSTOM_FILE=${MYCE_FILE_NAME:-.myCommands}
+COLUMN_WIDTH=${MYCE_COLUMN_WIDTH:-120} # If set to 'FULL', then the full terminal width will be used
+
+# If set to 'FULL', then unset so that the full width is used
+if [[ "${COLUMN_WIDTH}" == "FULL" ]]; then
+    unset COLUMN_WIDTH
+fi
+
 
 # Prints log message to the terminal
 #  <int> lvl - Print Level: Only print this message if the VERBOSE level is greater than or equal to this
@@ -336,7 +342,7 @@ function process_ini_file() {
 }
 
 # Walks the directory tree from the current directory to root and combines all
-# keys and values found in ${MY_CUSTOM_FILES} files.  The values closest to the
+# keys and values found in ${MY_CUSTOM_FILE} files.  The values closest to the
 # current directory are used
 function load_my_custom_files() {
     # Start in the current directory and move up the directory tree
@@ -344,9 +350,18 @@ function load_my_custom_files() {
     dir=$(pwd)
 
     # Find all files in the directory tree
+    log 1 "Searching for ${MY_CUSTOM_FILE} files in the directory tree..."
     while [ "$dir" != "/" ]; do
+        log 2 "Checking for file: ${MY_CUSTOM_FILE}"
         if [[ -f "$dir/${MY_CUSTOM_FILE}" ]]; then
+            log 3 "  Found file!"
             file_paths+=("$dir/${MY_CUSTOM_FILE}")
+        fi
+        # Try without the trailing 's' for backwards compatibility
+        log 2 "Checking for legacy file: ${MY_CUSTOM_FILE%?}"
+        if [[ -f "$dir/${MY_CUSTOM_FILE%?}" ]]; then
+            log 3 "  Found legacy file!"
+            file_paths+=("$dir/${MY_CUSTOM_FILE%?}")
         fi
         dir=$(dirname "$dir")
     done
@@ -573,6 +588,10 @@ function get_key_definition() {
     while [ "$dir" != "/" ]; do
         if [[ -f "$dir/${MY_CUSTOM_FILE}" ]]; then
             file_paths+=("$dir/${MY_CUSTOM_FILE}")
+        fi
+        # Try without the trailing 's' for backwards compatibility
+        if [[ -f "$dir/${MY_CUSTOM_FILE%?}" ]]; then
+            file_paths+=("$dir/${MY_CUSTOM_FILE%?}")
         fi
         dir=$(dirname "$dir")
     done
@@ -882,6 +901,10 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 26.1.5           Changing naming from '.myCommand' to '.myCommands' (added 's') for clarity.
+                    For backwards compatibility, will still check for 'myCommand' files.
+                    Default command file name can be overridden by defining 'MYCE_FILE_NAME' variable.
+                    Default column width for 'list' command can be overridden by defining 'MYCE_COLUMN_WIDTH' variable.
  - 25.12.18         BugFix: Nested substitutions not handled correctly
                     BugFix: Positional arguments not handled correctly
  - 25.12.10         BugFix: Infinite loop possible when an expanded reference contains a variable that was already expanded
