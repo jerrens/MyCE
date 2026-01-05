@@ -10,8 +10,7 @@
             "name": "Bash-Debug (simplest configuration)",
             "program": "${file}",
             "args": [
-                // "update",
-                // "diff"
+                // "test.subdef3",
             ]
         }
     ]
