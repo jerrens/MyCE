@@ -3,3 +3,5 @@
 .myCommands
 !.myCommands.example
 settings.json
+**/*.secret*
+**/.env

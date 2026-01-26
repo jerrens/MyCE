@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE
 
 __Author="Jerren Saunders"
-__Version=26.1.5
+__Version=26.1.26
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -297,6 +297,27 @@ function process_ini_file() {
 
         # Skip empty lines and comments
         if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+
+        # Check for include statements
+        if [[ "$line" =~ ^include[[:space:]]+(.+)$ ]]; then
+            include_file="${BASH_REMATCH[1]}"
+            log 2 "Include Statement detected: Including file - '$include_file'"
+
+            # Path may include tilde
+            include_file=$(eval echo "$include_file")
+
+            # Resolve relative paths based on the current file's directory
+            if [[ ! "$include_file" = /* ]]; then
+                include_file="$(dirname "$1")/$include_file"
+            fi
+
+            if [[ -f "$include_file" ]]; then
+                process_ini_file "$include_file"                
+            else
+                log 0 "  WARNING: Included file '$include_file' not found!"
+            fi
             continue
         fi
 
@@ -901,6 +922,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 26.1.26          Added support for 'include <file>' statements.
  - 26.1.5           Changing naming from '.myCommand' to '.myCommands' (added 's') for clarity.
                     For backwards compatibility, will still check for 'myCommand' files.
                     Default command file name can be overridden by defining 'MYCE_FILE_NAME' variable.

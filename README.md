@@ -51,9 +51,16 @@ Running `my server.start` will execute docker-compose up.
 
 The `.myCommands` files uses INI-style sections to allow optional grouping, and key-value pairs where each key is an alias for a command, and the value is the corresponding command.
 
+Other files may be included by using the `include <FILE>` syntax.
+The path may be absolute or relative and should follow the same INI-style syntax.
+If you want to include `.myCommands` in source control, it is recommended that you take advantage of this feature to store your credentials in a separate file.
+
 Example `.myCommands` file:
 
 ```ini
+# Include other files
+include credentials.secret
+
 # Variables
 LAST_CONTAINER="podman exec -it"
 DB_CONTAINER="pod-db"
@@ -170,6 +177,12 @@ Example: `my -d build`
 
 Variables can be set in `.myCommands` files at any directory level and accessed by commands in lower directories, allowing for flexible and reusable configurations.
 
+### Include Files
+
+Other files may be included by adding a `include <FILE>` line in a `.myCommands` file.
+The key-values defined in the referenced file will be processed as soon as the line is detected.
+This means that any definitions in the included file will overwrite any previously defined values and will be overwritten by any values processed later.
+
 
 
 ## Installation
@@ -191,7 +204,7 @@ Variables can be set in `.myCommands` files at any directory level and accessed 
 
     A sample is available at <https://github.com/jerrens/MyCE/blob/main/.myCommands.example>
 
-**Optional**: You can add my to your `.bashrc` or `.zshrc` if you prefer:
+**Optional**: You can add `my` to your `.bashrc` or `.zshrc` if you prefer:
 
 ```bash
 alias my='/path/to/my'
