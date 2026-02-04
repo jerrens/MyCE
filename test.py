@@ -57,6 +57,11 @@ test_cases = {
     "test.dblpos3 $(seq 1 15)": "^15 14 13 12 11 10 - 1 3 5 7 9$",
 
     "test.nested.sub Alice Blue": "Testing Nested Subst\n\x1b\[31mAlice!\x1b\[0m Other Blue",
+    
+
+    # System Commands
+    "echo 'Hello World'": "Hello World",
+    "unknown 'Hello World'": "Unknown command: unknown Hello World",
 }
 
 failing_keys = [  # Keys of tests that are currently failing
