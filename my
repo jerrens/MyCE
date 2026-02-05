@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE
 
 __Author="Jerren Saunders"
-__Version=26.2.5
+__Version=26.1.26
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -112,20 +112,6 @@ function runCMD() {
     local -a full_cmd=( "$cmd_string" "$@" )
 
     log 3 "Executing: ${full_cmd[*]}"
-    
-    # Check if this command even exists before trying to run it
-    bin_name="${full_cmd[0]%% *}"
-    # Expand tilde in bin_name if present
-    bin_name=$(eval echo "$bin_name")
-    
-    if ! command -v "${bin_name}" > /dev/null 2>&1; then
-        # Then was not a command, check if it is a file and is executable
-        if [[ ! -f "${bin_name}" ]] || [[ ! -x "${bin_name}" ]]; then
-            log 0 "Unknown command: ${full_cmd[@]}"
-            exit 1
-        fi
-    fi
-
     eval "${full_cmd[@]}"
 }
 
@@ -936,8 +922,6 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
- - 26.2.5           BugFix: Incorrectly handling executable file references as unknown command
- - 26.2.4           Improved error string for unknown commands
  - 26.1.26          Added support for 'include <file>' statements.
  - 26.1.5           Changing naming from '.myCommand' to '.myCommands' (added 's') for clarity.
                     For backwards compatibility, will still check for 'myCommand' files.

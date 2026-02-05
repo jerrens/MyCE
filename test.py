@@ -58,10 +58,15 @@ test_cases = {
 
     "test.nested.sub Alice Blue": "Testing Nested Subst\n\x1b\[31mAlice!\x1b\[0m Other Blue",
 
+    # Commands with ENV definitions
+    "time": "^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [AP]M$",
+    "timestamp": "^\d{8}_\d{6}$",
+
+    # Commands with pipes
+    "line.len 30": "^-{30}$",
 
     # System Commands
     "echo 'Hello World'": "Hello World",
-    "unknown 'Hello World'": "Unknown command: unknown Hello World",
 }
 
 failing_keys = [  # Keys of tests that are currently failing

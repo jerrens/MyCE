@@ -183,6 +183,47 @@ Other files may be included by adding a `include <FILE>` line in a `.myCommands`
 The key-values defined in the referenced file will be processed as soon as the line is detected.
 This means that any definitions in the included file will overwrite any previously defined values and will be overwritten by any values processed later.
 
+This feature is beneficial if you want to keep credentials and secrets in a separate file that is excluded from repositories, but you want the `.myCommands` file to be part of the version history for sharing with other developers.
+
+#### Example
+
+```ini
+# File: ./.credentials.secret
+
+[secret]
+password1=$3cr3+
+
+[toolA]
+APIKey=0123456789ABCDEF
+```
+
+```ini
+# File: ./.myCommands
+
+# Relative paths are supported
+# include ./tests/../credentials.secret
+
+# Paths with environment variables are supported
+# include $HOME/credentials.secret
+
+# Absolute paths are supported
+include ./.credentials.secret
+
+
+[secret]
+localcred=echo 'Password from PWD: "${secret.password1}"'
+
+[toolA]
+health=echo curl -s -H "Authorization: Bearer ${toolA.APIKey}" https://api.example.com/status
+```
+
+```bash
+> my secret.localcred
+Password from PWD: "$3cr3+"
+
+> my toolA.health
+curl -s -H Authorization: Bearer 0123456789ABCDEF https://api.example.com/status
+```
 
 
 ## Installation
