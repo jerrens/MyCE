@@ -5,7 +5,7 @@ import re
 
 # Array of command -> expected output pairs
 test_cases = {
-    "version": "\d{2}.\d{1,2}.\d{1,2}",    
+    "version": "\d{2}.\d{1,2}.\d{1,2}",
     "help": "USAGE:",
 
     "tmp": "^/home/.*/.myCommand",
@@ -51,13 +51,13 @@ test_cases = {
     "test.esc5 John Doe": "^def Doe$",
 
     "test.pos $(seq 1 15)": "^10 1 5 11 12 13 14 15$",
-    
+
     "test.dblpos1 $(seq 1 15)": "^1 2 3 4 5 6 7 8 9 10 11 12 13 14 15$",
     "test.dblpos2 $(seq 1 15)": "^2 4 6 8 10 12 14 15$",
     "test.dblpos3 $(seq 1 15)": "^15 14 13 12 11 10 - 1 3 5 7 9$",
 
     "test.nested.sub Alice Blue": "Testing Nested Subst\n\x1b\[31mAlice!\x1b\[0m Other Blue",
-    
+
 
     # System Commands
     "echo 'Hello World'": "Hello World",
@@ -88,7 +88,7 @@ def run_tests():
                 shell=True
             )
             actual_output = result.stdout.strip()
-            
+
             expected_pattern = re.compile(expected_output)
 
             if expected_pattern.search(actual_output):
@@ -101,7 +101,7 @@ def run_tests():
         except Exception as e:
             print(f"✗ {command} - Error: {e}")
             failed += 1
-    
+
     return failed
 
 if __name__ == "__main__":
