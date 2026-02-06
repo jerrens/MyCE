@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE
 
 __Author="Jerren Saunders"
-__Version=26.1.26
+__Version=26.2.6
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -496,18 +496,22 @@ function list_keys() {
             COLUMN_ARG="-c ${COLUMN_WIDTH}"
         fi
 
-        if [[ $include_const ]]; then
+        # Determine if variables (uppercase) words should be included
+        if [[ "$include_const" == "true" ]]; then
             log 1 "Including Vars"
-            keyPattern='^[a-zA-Z]'
+            grepCMD='grep "^[a-zA-Z]"'
         else 
-            keyPattern='^[a-z]'
+            log 1 "Excluding Vars"
+            grepCMD='grep "\\.\?[^A-Z_-]\+$"'
         fi
 
+        # Determine if output should be formatted in columns or a list
         if [[ "$use_column" == true ]]; then
-            printf "%s\n" "${!commands[@]}" | grep "${keyPattern}" | sort | column ${COLUMN_ARG}
+            outputCMD="column ${COLUMN_ARG}"
         else
-            printf "%s\n" "${!commands[@]}" | grep "${keyPattern}" | sort | sed "s/^/${indent}/"
-        fi
+            outputCMD='sed "s/^/${indent}/"'
+        fi        
+        printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort | eval ${outputCMD}
 
     else
         log 1 "No ${MY_CUSTOM_FILE} file was found in the current directory tree."
@@ -922,6 +926,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 26.2.6           Added support for hiding variables (all uppercase letters) defined in sections
  - 26.1.26          Added support for 'include <file>' statements.
  - 26.1.5           Changing naming from '.myCommand' to '.myCommands' (added 's') for clarity.
                     For backwards compatibility, will still check for 'myCommand' files.
