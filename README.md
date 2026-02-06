@@ -42,7 +42,7 @@ Running `my server.start` will execute docker-compose up.
 - **Argument Passing**: Additional arguments provided after the command alias are passed directly to the underlying command. This enables dynamic behavior and flexible command usage.
 - **Fallback to Shell**: If the requested alias is not found in the merged `.myCommands` configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
 - **Cross-Domain Commands with Variables**: Commands can reference variables set in different `.myCommands` files, allowing for reusable, high-level command configurations across directories. This feature is useful for defining generic commands in higher-level folders and reusing them in specific contexts within the workspace.
-
+- **Include Files**: Other files can be included for re-use and/or keeping secret credentials in separate files
 
 
 ## Usage
@@ -84,10 +84,10 @@ For example, if you're in a directory with the previous `.myCommands` file:
 # Usage:
 #    my <alias>
 
-my echo Hello World
-#> Custom Prefix: Hello World
+~>$ my echo Hello World
+Custom Prefix: Hello World
 
-my db.backup --gzip 
+~>$ my db.backup --gzip 
 # Runs: podman exec --interactive --tty --rm pod-db mongodump --gzip
 ```
 
@@ -122,10 +122,11 @@ Will be stored as:
 key=echo "Hello World"
 ```
 
-`list [-l]`:
+`list [-l] [-a]`:
 Can't remember what you used as the key?
 Just enter `my list` to view the available commands.
-If you don't like columns, add the `-l` option at the end to show one command per line
+If you don't like columns, add the `-l` option at the end to show one command per line.
+If you want to view all definitions (including variables), add the `-a` option.
 
 `update [diff]`:
 Easily pull down the latest version from the github repo.
@@ -176,6 +177,46 @@ Example: `my -d build`
 ### Handling Variables Across Directories
 
 Variables can be set in `.myCommands` files at any directory level and accessed by commands in lower directories, allowing for flexible and reusable configurations.
+To define a variable, use only uppercase letters, underscores, and dashes (ie `/[A-Z_-]/`).
+Variables may be defined inside of a section if desired for organization.
+These variables are excluded from the output the `list` subcommand by default unless the `-a` option is specified.
+
+#### Example:
+
+```ini
+# ~/code/.myCommands
+UBUNTU_IMAGE=ubuntu:22.04
+
+[pod]
+CONTAINER_EXE=podman
+
+ls=${pod.CONTAINER_EXE} ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
+dist=${pod.CONTAINER_EXE} run -it --rm ${UBUNTU_IMAGE} bash -c "cat /etc/lsb-release | grep DESCRIPTION"
+terminal=${pod.CONTAINER_EXE} run -it --rm ${UBUNTU_IMAGE} bash
+```
+
+```ini
+# ~/code/project_B/.myCommand
+UBUNTU_IMAGE=ubuntu:20.04
+
+[pod]
+CONTAINER_EXE=docker
+```
+
+```bash
+~/code/projectA>$ my pod.dist
+# CMD: podman run -it --rm ubuntu:22.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2" 
+"Ubuntu 22.04.5 LTS"
+
+~/code/projectB>$ my pod.dist
+# CMD: docker run -it --rm ubuntu:20.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2" 
+"Ubuntu 20.04.6 LTS"
+# Notice this used docker and Ubuntu 20.04 instead of podman and 22.04
+
+~/code/projectC>$ my pod.dist
+# CMD: podman run -it --rm ubuntu:22.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2" 
+"Ubuntu 22.04.5 LTS"
+```
 
 ### Include Files
 
@@ -306,10 +347,12 @@ The command executed changes based on the directory you are in, as it reads the 
 ## Enable TAB Command Completion
 
 The bash terminal offers a simple command completion feature using the TAB key while entering commands.
-To take advantage of this feature with MyCE, you'll need to perform the following steps.
+To take advantage of this feature with MyCE, if you already have the folder `/etc/bash_completion.d` you can run `my update` to download the latest release and install the auto-completion script.
+You may need to run `exec bash` after the update for your shell to load the new feature
+If you're using a different shell or location for your completion scripts, the manual installation instructions are:
 
 1. Copy the bash-completion/my file from this repo to `/etc/bash_completion.d/my`
-2. Enable the execute flag
+2. Enable the execute flag (`chmod +x`)
 
 This can be done with the following commands (these will likely need to be run as `sudo`)
 

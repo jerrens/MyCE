@@ -30,7 +30,7 @@ USAGE:
 
         set <key> <command>  Adds or updates the 'key' to the '${MY_CUSTOM_FILE}' file in the current directory.
                              The given command will be used whenever called from this level or a descendant.
-        
+
         update [diff]       Update the script with the latest version.  If 'diff' is given, then show the changes
 
         help        Show usage
@@ -314,7 +314,7 @@ function process_ini_file() {
             fi
 
             if [[ -f "$include_file" ]]; then
-                process_ini_file "$include_file"                
+                process_ini_file "$include_file"
             else
                 log 0 "  WARNING: Included file '$include_file' not found!"
             fi
@@ -486,7 +486,7 @@ function list_keys() {
                 log 0 "Unknown argument: $1\n";;
         esac
 
-        shift    
+        shift
     done
 
     if load_my_custom_files; then
@@ -500,7 +500,7 @@ function list_keys() {
         if [[ "$include_const" == "true" ]]; then
             log 1 "Including Vars"
             grepCMD='grep "^[a-zA-Z]"'
-        else 
+        else
             log 1 "Excluding Vars"
             grepCMD='grep "\\.\?[^A-Z_-]\+$"'
         fi
@@ -510,7 +510,7 @@ function list_keys() {
             outputCMD="column ${COLUMN_ARG}"
         else
             outputCMD='sed "s/^/${indent}/"'
-        fi        
+        fi
         printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort | eval ${outputCMD}
 
     else
@@ -528,7 +528,7 @@ function print_key_entries_in_file() {
     log 1 "Searching file: $1"
 
     declare -a foundFileDefs=()
-    
+
     local section=""
     local lineNumber=0
     OLD_IFS=$IFS
@@ -556,7 +556,7 @@ function print_key_entries_in_file() {
         key="${key#"${key%%[![:space:]]*}"}"   # remove leading whitespace characters
         key="${key%"${key##*[![:space:]]}"}"   # remove trailing whitespace characters
         value="${value#"${value%%[![:space:]]*}"}"   # remove leading whitespace characters
-        value="${value%"${value##*[![:space:]]}"}"   # remove trailing whitespace characters        
+        value="${value%"${value##*[![:space:]]}"}"   # remove trailing whitespace characters
         fullKey=$key
         log 2 "      $key=$value"
 
@@ -565,7 +565,7 @@ function print_key_entries_in_file() {
             fullKey="${section}.${key}"
             log 3 "        Full Key: ${fullKey}"
         fi
-        
+
         # If this key is the one we're searching for, collect it
         if [[ "$searchKey" == "$fullKey" ]]; then
             log 2 "  Key Match @$lineNumber: $fullKey - ($value)"
@@ -587,7 +587,7 @@ function print_key_entries_in_file() {
     if [[ -z ${foundFileDefs[@]} ]]; then
         # Nothing found in this file
         log 1 "  Nothing found\n"
-    else 
+    else
         # Definition was found
         for line in "${foundFileDefs[@]}"; do
             # Replace any line wrap chars with an escaped version for the print
@@ -643,12 +643,12 @@ function get_key_definition() {
     # After collecting all lines, print the contents as a table using column
     if [[ -z ${foundDefs[@]} ]]; then
         log 1 "  Not found\n"
-    else 
+    else
         log 1 "Definitions Found:\n$(printf '%*s' 100 | tr ' ' '-')"
         for line in "${foundDefs[@]}"; do
             # Replace any line wrap chars with an escaped version for the print
             log 0 "${line//\\n/\\\\n}"
-        done | column -t -s "|" 
+        done | column -t -s "|"
     fi
 
     log 1 "\n\e[3m** NOTE: If multiple definitions were found, the last definition shown is used\e[0m\n"
@@ -696,7 +696,7 @@ function find_and_run_cmd() {
 
                 # Check if there is a default value part like {$1:-DefaultVal}
                 binary_cmd=${binary_cmd//${BASH_REMATCH[1]}/$arg}
-                
+
                 log 2 "    New:  $binary_cmd"
             else
                 log 3 "No positional arg reference found for arg $i"
@@ -722,7 +722,7 @@ function find_and_run_cmd() {
             log 3 "Variable Reference Match Results - [1]='${BASH_REMATCH[1]}'; [2]='${BASH_REMATCH[2]}'; [3]='${BASH_REMATCH[3]}'; [4]='${BASH_REMATCH[4]}'"
 
             slug="${BASH_REMATCH[2]}"
-                
+
             if [[ -n ${BASH_REMATCH[4]} ]]; then
                 # If the variable is surrounded by {}, it starts with [a-zA-Z_] and includes any character except for }
                 var_name=${BASH_REMATCH[4]}
@@ -754,11 +754,11 @@ function find_and_run_cmd() {
                 log 3 "    Update Refs:       $binary_cmd"
 
                 # Restore the escaped version
-                binary_cmd="${binary_cmd//$temp_placeholder/\\$slug}"                
+                binary_cmd="${binary_cmd//$temp_placeholder/\\$slug}"
                 log 3 "    Restore Previous:  $binary_cmd"
             fi
-              
-            log 2 "    New:  $binary_cmd"            
+
+            log 2 "    New:  $binary_cmd"
 
             # Avoid an infinite loop
             ((loopCount++))
@@ -787,6 +787,35 @@ function find_and_run_cmd() {
     fi
 }
 
+# Download and extract the latest releast from github to a temp folder
+function download_latest_release() {
+    local temp_file="$1"
+    local repo="$2"
+
+    # Get the latest release files into a tmp location
+    log 1 "Checking ${repo} for latest release..."
+
+    latest_tag="$(curl -Ls -o /dev/null -w '%{url_effective}' ${repo}/releases/latest | awk -F'/' '{print $NF}')"
+    log 1 "Found Latest Release Tag: ${latest_tag}"
+
+    local github_path="${repo}/archive/refs/tags/${latest_tag}.tar.gz"
+
+    # Download the latest version from the github repo
+    log 0 "\nDownloading latest version from GitHub..."
+    log 0 "    ${github_path}\n"
+
+    # Example: https://github.com/jerrens/MyCE/archive/refs/tags/v26.2.6.tar.gz`
+    log 2 "Storing temp file at: ${temp_file}"
+    if ! wget --output-document "${temp_file}" --quiet "${github_path}"; then
+        log 0 "Failed to download the latest version from ${github_path}"
+        exit 1
+    fi
+
+    # Extract the downloaded archive
+    archive_root="MyCE-${latest_tag#v}"
+    tar -xzf "${temp_file}" --directory /tmp --wildcards "${archive_root}/my" --wildcards "${archive_root}/bash-completion/*"
+}
+
 
 # Update the script with the latest version
 function update_script() {
@@ -794,6 +823,8 @@ function update_script() {
     github_path=https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
     # install_path=/usr/local/bin/my
     install_path=$0
+    local repo=https://github.com/jerrens/MyCE
+    local temp_file="/tmp/${__AppName}.${latest_tag}.tar.gz"
 
     # Check for internet access
     if ! ping -q -c 1 -W 1 8.8.8.8 >/dev/null; then
@@ -803,19 +834,15 @@ function update_script() {
 
     # If 'diff' is requested, then download and show the diff
     if [[ "$arg" == "diff" ]]; then
-        # Download the latest version from the github repo
-        local temp_file="/tmp/${__AppName}.new"
+        # Download and extract the latest released files
+        download_latest_release "${temp_file}" "${repo}"
 
-        # Download the new version to a temp file
-        if ! runCMD curl --silent --location --output "${temp_file}" "${github_path}"; then
-            log 0 "Failed to download the latest version from $github_path"
-            exit 1
-        fi
+        my_file_path="/tmp/${archive_root}/my"
 
-        if ! diff -q "${temp_file}" "${install_path}" >/dev/null; then
+        if ! diff -q "${my_file_path}" "${install_path}" >/dev/null; then
             # Show the diff
             log 0 "The following are the changes between your current version and the latest version on GitHub:\n"
-            sdiff -s --width=200 "${install_path}" "${temp_file}"
+            sdiff -s --width=200 "${install_path}" "${my_file_path}"
 
             log 0 "\n---------------------------------------------------------------------------"
             log 0 "You can run '${__ScriptName} update' to update to the latest version"
@@ -826,9 +853,9 @@ function update_script() {
 
         # Remove the temp file
         rm "${temp_file}"
+        rm -R "/tmp/${archive_root}"
         exit 0
     fi
-
 
     if [ "$EUID" -ne 0 ]; then
         log 0 "This should be run as root.  Attempting to elevate permissions..."
@@ -842,21 +869,29 @@ function update_script() {
         exit
     fi
     # NOTE: Root Level if here
+    
+    download_latest_release "${temp_file}" "${repo}"
 
-    # Download the latest version from the github repo
-    log 0 "\nDownloading latest version from GitHub..."
-    log 0 "    ${github_path}\n"
+    log 0 "Updating from v${__Version} to ${latest_tag}..."
 
-    # Download the latest version of my
-    if ! runCMD curl --silent --location --output "${install_path}" "${github_path}"; then
-        log 0 "Failed to download the latest version from ${github_path}"
-        exit 1
+    # Move 'my' and make it executable
+    log 1 "Installing to ${install_path}..."
+    runCMD mv "/tmp/${archive_root}/my" "${install_path}"
+    log 1 "\nModifying permissions..."
+    runCMD chmod a+x "${install_path}"
+
+    # Install auto-completion (if path exists)
+    local completion_dir="/etc/bash_completion.d"
+    if [[ -d "${completion_dir}" ]]; then
+        log 1 "Updating auto-completion file at ${completion_dir}..."
+        runCMD mv "/tmp/${archive_root}/bash-completion/my" "${completion_dir}/my.bash_completion"
+        runCMD chmod 644 "${completion_dir}/my.bash_completion"
     fi
 
-    # Make it executable
-    log 0 "\nModifying permissions..."
-    runCMD chmod 755 "${install_path}"
     log 0 "Update finished!"
+    log 2 "Removing temp file"
+    rm "${temp_file}"
+    rm -R "/tmp/${archive_root}"
     exit 0
 }
 
@@ -926,7 +961,9 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
- - 26.2.6           Added support for hiding variables (all uppercase letters) defined in sections
+ - 26.2.6           Added support for hiding variables (all uppercase letters) defined in sections.
+                    `update` command now retrieves latest released instead of latest committed.
+                    bash-completion file installed if the expected directory exists
  - 26.1.26          Added support for 'include <file>' statements.
  - 26.1.5           Changing naming from '.myCommand' to '.myCommands' (added 's') for clarity.
                     For backwards compatibility, will still check for 'myCommand' files.
