@@ -8,7 +8,7 @@
 }
 -->
 <!-- spell-checker:ignore Myce sdiff -->
-<div align="center"><img style="max-width: 450px;" src="./logo/Myce - Blue.png" alt="MyCE Logo"></div>
+<div align="center"><img src="./logo/MyCEv2.png" alt="MyCE Logo"></div>
 
 # My Command Engine (MyCE)
 
@@ -181,7 +181,7 @@ To define a variable, use only uppercase letters, underscores, and dashes (ie `/
 Variables may be defined inside of a section if desired for organization.
 These variables are excluded from the output the `list` subcommand by default unless the `-a` option is specified.
 
-#### Example:
+#### Example
 
 ```ini
 # ~/code/.myCommands
