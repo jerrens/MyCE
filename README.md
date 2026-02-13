@@ -87,25 +87,68 @@ For example, if you're in a directory with the previous `.myCommands` file:
 ~>$ my echo Hello World
 Custom Prefix: Hello World
 
-~>$ my db.backup --gzip 
+~>$ my db.backup --gzip
 # Runs: podman exec --interactive --tty --rm pod-db mongodump --gzip
 ```
 
-### Arguments
+## Actions
 
 The `my` script has the following internal commands.
 These commands take priority over any keys or aliases of the same name that are defined in any `.myCommands` files, ***so consider them reserved keywords.***
 
-`help`:
-Don't worry if you forget the basics.  
+### `help`
+
+Don't worry if you forget the basics.
 Simply type `my help` to view the usage details.
 
-`version`:
-Not sure if you have the latest version installed?  
-Just run `my version` and compare against the latest version on [GitHub](https://github.com/jerrens/MyCE)
+```shell
+$> my help
 
-`set <cmd> <value>`:
-**Experimental!**
+This script will search the current directory tree for a file named '.myCommands', containing
+a key that matches the first argument.  If found, the value of that key will be used instead.
+This can be used to allow local overriding of certain commands to point to a container
+instead of the local installed command.
+
+USAGE:
+    my [OPTIONS] [help | version | set | list [-l] | KEY [args...]]
+
+        <KEY> [...args]     The key of the command to run
+
+        list [-l] [-a]      List the available command keys.
+                            Include the '-l' arg to list one key per line.  Default is column view.
+                            Include the '-a' arg to include variables (uppercase)
+
+        definition <key>    Identifies the file(s) the given key exist in.
+
+        set <key> <command>  Adds or updates the 'key' to the '.myCommands' file in the current directory.
+                             The given command will be used whenever called from this level or a descendant.
+
+        update [diff]       Update the script with the latest version.  If 'diff' is given, then show the changes
+
+        help        Show usage
+        version     Show version number
+
+    OPTIONS:
+        -c      Run the command without sourcing the default shell rc file
+        -v      Verbose Level (Multiple may be given to increase the verbosity)
+        -d      Dry Run.
+
+
+ By: Jerren Saunders
+ Version: 26.2.14
+```
+
+### `version`:
+
+Not sure if you have the latest version installed?
+Run `my version` and compare against the latest version on [GitHub](https://github.com/jerrens/MyCE/releases).
+
+
+### `set <cmd> <value>`:
+
+> [!CAUTION]
+> **Experimental!**
+
 This command may be used to add a new value to the `.myCommands` file in the current directory.
 The first argument is the key/alias, all remaining arguments will be treated as the value.
 If the command should belong inside an INI section, then use a '.' to separate group from the key.
@@ -122,57 +165,115 @@ Will be stored as:
 key=echo "Hello World"
 ```
 
-`list [-l] [-a]`:
+### `list [-l] [-a]`:
+
 Can't remember what you used as the key?
 Just enter `my list` to view the available commands.
 If you don't like columns, add the `-l` option at the end to show one command per line.
 If you want to view all definitions (including variables), add the `-a` option.
 
-`update [diff]`:
-Easily pull down the latest version from the github repo.
-The file will be downloaded into `/usr/local/bin` and the permissions set to 755.
+```shell
+>$ my list
+The following commands are available:
+projA.env.backup                pod.log                         swap.on
+projA.env.diff                  pod.ls                          swap.status
+projA.env.view                  pod.replace                     test.dblpos1
+projB.env.backup                pod.replace+                    test.dblpos2
+projB.env.diff                  pod.run                         test.dblpos3
+```
+
+### `definition <cmd>`:
+
+It can be easy to forget which `.myCommands` file you added a definition especially if you're attempting to edit it.
+To help locate which file(s) a certain command is defined, you can use the `definition` action to show it's references.
+
+The output will contain the full file path, line number, command reference (section and command), and the value (no substitutions) given in that file.
+
+```shell
+ ~/code/MyCE/tests/projectB>$ my definition pod.ls
+/home/jerren/.myCommand:91                       [pod]⇒ ls    podman ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
+/home/jerren/code/MyCE/.myCommands:94       [pod]⇒ ls    podman ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
+/home/jerren/code/MyCE/tests/.myCommands:7  [pod]⇒ ls    ${pod.CONTAINER_EXE} ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
+```
+
+
+### `update [diff] [latest|released|head|main|<TAG>]`:
+
+Easily pull down updates from the github repo.
+The file will automatically update the MyCE script (tpyically `/usr/local/bin`) and the permissions set to 755.
 This command needs to be run with root level privileges.
 If not, it will attempt to elevate itself and prompt for a password if needed.
 
-If you only want to view the changes (uses `sdiff`) between your local version and the latest version on GitHub, you can use `my update diff`
+If you only want to view the changes (uses `sdiff`) between your local version and the latest version on GitHub, you can use `my update diff`.
+You can also reference a version tag with the diff command.
+If not specified, the latest released version will be assumed.
 
-> ***NOTE:***
->
-> This pulls down the latest checked-in version and **not** the latest release.
-> It may contain bugs.
+By default, the latest released version will be installed.
+You can explicitly reference this with either `my
+If you want to grab the latest version from the `main` branch, specify either `head` or `main`.
+
+You may roll-back to a previously release version by specifying the tag.
+To view all available tags, see [GitHub Repo Tags](https://github.com/jerrens/MyCE/tags).
+
+```shell
+my update diff
+my update diff head
+my update diff v26.2.13
+
+my update head
+my update v26.2.13
+```
 
 
-### Options
+## Options
 
-Options for the `my` script should be added immediately following the `my` script call (before the key).
+> [!IMPORTANT]
+> Options for the `my` script should be added immediately following the `my` script call (before the key).
 
-`-v | -vv | -vvv`:
+### `-v | -vv | -vvv`:
 Log prints can be enabled for debugging by including the `-v` option.
 Crank up the level by stacking more (`-vv`, `-vvv`).
-Three levels is currently the most verbosity used in log prints, but if you get a little trigger happy with the `v` key, it will be ok.
+Three levels is currently the most verbosity used in log prints, but if you get a little trigger happy with the `v` key, it will be ok :smiley:.
 
-Example: `my -vv build`
+```shell
+my -v build
+my -vv build
+my -vvv build
+```
 
-`-d`:
+### `-d`:
 Curious how your `.myCommands` entries will expand, but not brave enough to just try?
 A dry run can be enabled by using the `-d` option.
-In dry run mode, the expanded command will be printed, but not executed
 
-Example: `my -d build`
+> [!TIP]
+> In dry run mode, the expanded command will be printed, but not executed
 
-`-c`:
+```shell
+$> my -d pod.con
+---- THIS IS A DRYRUN! ----
+
+CMD: podman exec -it my-container bash 
+```
+
+### `-c`:
 Include this option if you don't want your shell rc file to expand for this execution.
 To always disable sourcing the shell rc file, see [MYCE_RUNCOM](#myce_runcom).
 
-Example: `my -c build`
+```shell
+my -c build
+```
 
 
-## Command Lookup Process
+## How it Works - Command Lookup Process
+
+If you're reading this section, welcome fellow nerd :nerd_face:!
 
 1. **Merging and Overriding**:
-    The script starts at the root directory, working down to the current directory (pwd), merging any `.myCommands` files found along the way.
-    Commands defined in `.myCommands` files closer to the current directory override duplicates from higher-level directories.
-    This makes the command engine adaptable for different projects without the need for globally defined aliases.
+    The script starts with `~/.myCommands` file if it exists, then moves to the root directory and works down to the current directory (pwd), merging any `.myCommands` files found along the way.
+    Any collisions with duplicate keys names will overwrite previous definition values.
+    This means that commands defined in `.myCommands` files closer to the current directory override duplicates from higher-level directories.
+    This makes the command engine adaptable for different projects, but also allows for globally defined aliases.
+    It is important to note that the definitions are not processed during this step, so no variable substitutions will be performed.
 
 2. **Sectioned Access**:
     Commands are referenced using `section.key` syntax if using INI-style sections.
@@ -184,10 +285,10 @@ Example: `my -c build`
 
 Variables can be set in `.myCommands` files at any directory level and accessed by commands in lower directories, allowing for flexible and reusable configurations.
 To define a variable, use only uppercase letters, underscores, and dashes (ie `/[A-Z_-]/`).
-Variables may be defined inside of a section if desired for organization.
+Variables may be defined inside of a section if desired for better organization of your definitions.
 These variables are excluded from the output the `list` subcommand by default unless the `-a` option is specified.
 
-#### Example
+#### Example Hierarchy
 
 ```ini
 # ~/code/.myCommands
@@ -211,16 +312,16 @@ CONTAINER_EXE=docker
 
 ```bash
 ~/code/projectA>$ my pod.dist
-# CMD: podman run -it --rm ubuntu:22.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2" 
+# CMD: podman run -it --rm ubuntu:22.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2"
 "Ubuntu 22.04.5 LTS"
 
 ~/code/projectB>$ my pod.dist
-# CMD: docker run -it --rm ubuntu:20.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2" 
+# CMD: docker run -it --rm ubuntu:20.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2"
 "Ubuntu 20.04.6 LTS"
 # Notice this used docker and Ubuntu 20.04 instead of podman and 22.04
 
 ~/code/projectC>$ my pod.dist
-# CMD: podman run -it --rm ubuntu:22.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2" 
+# CMD: podman run -it --rm ubuntu:22.04 bash -c "grep DESCRIPTION /etc/lsb-release | cut -d'=' -f2"
 "Ubuntu 22.04.5 LTS"
 ```
 
@@ -232,7 +333,7 @@ This means that any definitions in the included file will overwrite any previous
 
 This feature is beneficial if you want to keep credentials and secrets in a separate file that is excluded from repositories, but you want the `.myCommands` file to be part of the version history for sharing with other developers.
 
-#### Example
+#### Example Include
 
 ```ini
 # File: ./.credentials.secret
@@ -305,17 +406,17 @@ Optional environment variables may be defined to override default values for MyC
 These variables should be set for the current session by using `export <VARIABLE>=<VALUE>`
 or permanently by defining in `.bashrc` or `.zshrc`.
 
-### MYCE_FILE_NAME
+### `MYCE_FILE_NAME`
 
-By default, MyCE will load command definitions from `.myCommands` files in the current directory tree.  
+By default, MyCE will load command definitions from `.myCommands` files in the current directory tree.
 Set the value of this variable to the desired file name if you wish to override the file name used.
 
-### MYCE_COLUMN_WIDTH
+### `MYCE_COLUMN_WIDTH`
 
 By default, the `list` action will use a column width of 120 when printing aliases.
 Set the value of this variable to the desired width, or to `FULL` to use the full terminal width.
 
-### MYCE_RUNCOM
+### `MYCE_RUNCOM`
 
 By default, MyCE will source the shell's rc file (eg. `~/.bashrc`, `~/.zshrc`, `~/.kshrc`) to the subshell so that user customizations defined there can be used.
 Set the value of this variable to an alternative path if the file you want sourced is different from the default shell path (eg. `export MYCE_RUNCOM=~/.profile`).

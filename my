@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE mkfifo
 
 __Author="Jerren Saunders"
-__Version=26.2.13
+__Version=26.2.14
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -77,7 +77,7 @@ COLUMN_WIDTH=${MYCE_COLUMN_WIDTH:-120} # If set to 'FULL', then the full termina
 
 if [[ -n "${__Shell}" ]] && [ "${__Shell}" != "false" ]; then
     SHELL_RC="$HOME/.${__Shell}rc"
-    
+
     # if [ ! -f "${SHELL_RC}" ]; then
     #     SHELL_RC=false
     # fi
@@ -148,13 +148,13 @@ function runCMD() {
 
     # Original execution of the command
     # eval "${full_cmd[@]}"
-    
+
 
     # Attempt to filter STDERR, but has some false positives
     # eval "${full_cmd[@]}" 2> >(grep -v "^$0" || echo "Unknown Command" >&2)
-    
 
-    # Filter STDERR output provide a helpful error message if 
+
+    # Filter STDERR output provide a helpful error message if
     # problem originated by this script (the eval command)
     # but allow STDERR from the executed command to pass through
     eval "${full_cmd[@]}" 2> >(awk -v prefix="$0" '{ if ($0 ~ "^" prefix) { print "Unknown key or command. See `'$0' list` for known keys" } else { print $0 } }' >&2)
@@ -163,10 +163,10 @@ function runCMD() {
     # Alternative is to use a named pipe to filter responses
     # tmpfile="/tmp/fifo.$$"
     # mkfifo $tmpfile
-    
+
     # #Filter STDERR and pass to the terminal
     # grep -v "^$0" < $tmpfile >&2 &
-    
+
     # eval "${full_cmd[@]}" 2> $tmpfile
     # rm $tmpfile
 }
@@ -864,18 +864,39 @@ function find_and_run_cmd() {
 function download_latest_release() {
     local temp_file="$1"
     local repo="$2"
+    local tag="${3:latest}"
 
     # Get the latest release files into a tmp location
-    log 1 "Checking ${repo} for latest release..."
+    log 1 "Checking ${repo} for ${tag} release..."
 
-    latest_tag="$(curl -Ls -o /dev/null -w '%{url_effective}' ${repo}/releases/latest | awk -F'/' '{print $NF}')"
-    log 1 "Found Latest Release Tag: ${latest_tag}"
+    case ${tag} in
+        latest|release|released )
+            tag="$(curl -Ls -o /dev/null -w '%{url_effective}' ${repo}/releases/latest | awk -F'/' '{print $NF}')"
+            log 1 "Found Latest Release Tag: ${tag}"
+            local github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
+            archive_root="MyCE-${tag#v}"
+            ;;
 
-    local github_path="${repo}/archive/refs/tags/${latest_tag}.tar.gz"
+        head|main )
+            log 1 "Using head of Main branch"
+            local github_path="${repo}/archive/refs/heads/main.tar.gz"
+            tag=main
+            archive_root="MyCE-main"
+            ;;
+
+        # Assume the given value is a version number
+        * )
+            log 1 "Using Release Tag: ${tag}"
+            local github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
+            archive_root="MyCE-${tag#v}"
+            ;;
+    esac
+
 
     # Download the latest version from the github repo
     log 0 "\nDownloading latest version from GitHub..."
     log 0 "    ${github_path}\n"
+
 
     # Example: https://github.com/jerrens/MyCE/archive/refs/tags/v26.2.6.tar.gz`
     log 2 "Storing temp file at: ${temp_file}"
@@ -885,19 +906,43 @@ function download_latest_release() {
     fi
 
     # Extract the downloaded archive
-    archive_root="MyCE-${latest_tag#v}"
+    # archive_root="MyCE-${tag#v}"
     tar -xzf "${temp_file}" --directory /tmp --wildcards "${archive_root}/my" --wildcards "${archive_root}/bash-completion/*"
 }
 
 
 # Update the script with the latest version
 function update_script() {
-    local arg="$2"
+    tag=released
+
+    # Grab the options
+    while [ $# -gt 0 ]; do
+        # echo "Option: $1"
+        case ${1} in
+            update ) ;; # Expected for first arg
+            diff ) show_diff=true ;;
+            # head|main ) tag=head ;;
+            # released ) tag=released ;;
+
+            # Assume the given value is a version number (vYY.mm.dd), head, main, or released
+            * ) tag=${1} ;;
+        esac
+        shift
+    done
+
     github_path=https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
-    # install_path=/usr/local/bin/my
-    install_path=$0
+
+    # Determine where we should install the update
+    # If running this script in a dev env (running with `./my ...`), then we don't want to accidentally replace these dev changes with the version from the repo release
+    # Expected location is typically: /usr/local/bin/my
+    exe_basename=$(basename $0 2> /dev/null) # Get the filename of the exe running
+    # Handle if not installed in a PATH location (running locally), by referencing the executing script
+    install_path=$(which ${exe_basename} 2> /dev/null)
+    install_path=${install_path:-$0}
+
     local repo=https://github.com/jerrens/MyCE
-    local temp_file="/tmp/${__AppName}.${latest_tag}.tar.gz"
+    local temp_file="/tmp/${__AppName}.${tag}.tar.gz"
+
 
     # Check for internet access
     if ! ping -q -c 1 -W 1 8.8.8.8 >/dev/null; then
@@ -906,9 +951,10 @@ function update_script() {
     fi
 
     # If 'diff' is requested, then download and show the diff
-    if [[ "$arg" == "diff" ]]; then
+    if [[ -n "$show_diff" ]]; then
+        log 2 "User requested to view diff"
         # Download and extract the latest released files
-        download_latest_release "${temp_file}" "${repo}"
+        download_latest_release "${temp_file}" "${repo}" "${tag}"
 
         my_file_path="/tmp/${archive_root}/my"
 
@@ -943,9 +989,9 @@ function update_script() {
     fi
     # NOTE: Root Level if here
 
-    download_latest_release "${temp_file}" "${repo}"
+    download_latest_release "${temp_file}" "${repo}" "${tag}"
 
-    log 0 "Updating from v${__Version} to ${latest_tag}..."
+    log 0 "Updating from v${__Version} to ${tag}..."
 
     # Move 'my' and make it executable
     log 1 "Installing to ${install_path}..."
@@ -1034,6 +1080,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 26.2.14          Enhanced `update` subcommand to support targeting a specific release tag
  - 26.2.13          Provides a user-friendly error message if the given command is not known, while
                     allowing STD_ERR output from executed commands to be passed on.
                     Changed to using `type` command for checking if utility exist.
