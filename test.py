@@ -3,6 +3,8 @@ import subprocess
 import sys
 import re
 
+exe="./my"
+
 # Array of command -> expected output pairs
 test_cases = {
     "version": "\d{2}.\d{1,2}.\d{1,2}",
@@ -67,6 +69,29 @@ test_cases = {
 
     # System Commands
     "echo 'Hello World'": "Hello World",
+    
+    '#STDERR': "STDERR Filtering",
+    "unknown cmd": "^Unknown key or command",
+    "ls /bad": "ls: cannot access '/bad': No such file or directory",
+
+    '#ENV': 'Checking ENV Variables',
+    # f"MYCE_RUNCOM=false {exe} -vv time": "MYCE_RUNCOM file not found or set to 'false'",
+    "-vv time": {
+        "env": {"MYCE_RUNCOM": "false"},
+        "see": "MYCE_RUNCOM file not found or set to 'false'",
+    },
+
+    "-c -vv time" : "MYCE_RUNCOM file not found or set to 'false'",
+}
+
+test_cases = {
+    "Advanced Test": {
+        "cmd": "-d alt", # Overrides the command given to MyCE.  If not defined, the test key is used as with simple test
+        "pre": "echo", # OPTIONAL: Prefix to include before the MyCE exe.  This may be used to 'echo' or in-line variables
+        "see": f"{exe} -d alt", # REQUIRED: the grep pattern expected to be seen in the output
+        "env": {}, # OPTIONAL: Dictionary of environment variables to set in the subshell for the test
+        "description": "Optional description", # OPTIONAL: A description to print in the test output
+    },
 }
 
 failing_keys = [  # Keys of tests that are currently failing
@@ -81,27 +106,52 @@ failing_keys = [  # Keys of tests that are currently failing
 
 def run_tests():
     failed = 0
-    for command, expected_output in test_cases.items():
+    for command, val in test_cases.items():
         try:
-            # print(f"Executing command: ./my {command}")
+            if isinstance(val, dict):
+                cmd_prefix = val.get("pre", "")
+                cmd_suffix = val.get("cmd", command) # Allow overwritting with the 'cmd' key if present
+                env_list = val.get("env", None)
+                expected_output = val.get("see", "Missing 'see' property in test")
+                description = val.get("description", "")
+            else:
+                cmd_prefix = ""
+                cmd_suffix=command
+                env_list = None
+                expected_output = val
+                description = ""
+
+            # Handle section headers
+            if command.startswith('#'):
+                print(f"\n{expected_output}\n" + "-" * 30)
+                continue
+           
+            test_cmd = f"{cmd_prefix} {exe} {cmd_suffix}"
+            
+            if "-d" in sys.argv or "--debug" in sys.argv:
+                print(f">> Executing: {test_cmd}\n\t", end="")
 
             result = subprocess.run(
-                f"./my {command}",
+                test_cmd,
                 capture_output=True,
                 text=True,
                 timeout=5,
-                shell=True
+                shell=True,
+                env=env_list,
             )
-            actual_output = result.stdout.strip()
+            actual_output = result.stdout.strip() + result.stderr.strip()
 
             expected_pattern = re.compile(expected_output)
 
             if expected_pattern.search(actual_output):
-                print(f"✓ {command}")
+                print(f"✓ {command:<40} {description}")
             else:
-                print(f"✗ {command}")
+                print("\033[1;31m", end='')
+                print(f"✗ {command:<40} {description}")
                 print(f"    Expected: {expected_output}")
                 print(f"    Got:      {actual_output}")
+                print(f"    Command   {test_cmd}")
+                print("\033[0m", end='')
                 failed += 1
         except Exception as e:
             print(f"✗ {command} - Error: {e}")

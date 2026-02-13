@@ -1,12 +1,19 @@
 #!/bin/bash
-# spell-checker:words dzdo sdiff MyCE
+# spell-checker:words dzdo sdiff MyCE mkfifo
 
 __Author="Jerren Saunders"
-__Version=26.2.6
+__Version=26.2.13
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
 __origArgs=$* # Capture all of the original arguments
+
+# Detect the shell if possible
+if [[ $(type -t ps) == "file" ]]; then
+    __Shell="$((ps -p $$ -f -o "command=" || echo $SHELL) | basename $(cut -d' ' -f1) 2>/dev/null)"
+fi
+__Shell="${__Shell:-false}"
+
 
 function print_usage() {
     includeAppInfo=${1}
@@ -37,6 +44,7 @@ USAGE:
         version     Show version number
 
     OPTIONS:
+        -c      Run the command without sourcing the default shell rc file
         -v      Verbose Level (Multiple may be given to increase the verbosity)
         -d      Dry Run.
 
@@ -55,6 +63,8 @@ EOT
     log 2 "  DryRun:  ${DRYRUN}"
     log 2 "  Verbose: ${VERBOSE}"
     log 2 "  File:    ${MY_CUSTOM_FILE}"
+    log 2 "  Column:  ${COLUMN_WIDTH}"
+    log 2 "  ShellRC: ${MYCE_RUNCOM}"
     log 2 ""
 
 }
@@ -64,6 +74,18 @@ VERBOSE=0
 DRYRUN=false
 MY_CUSTOM_FILE=${MYCE_FILE_NAME:-.myCommands}
 COLUMN_WIDTH=${MYCE_COLUMN_WIDTH:-120} # If set to 'FULL', then the full terminal width will be used
+
+if [[ -n "${__Shell}" ]] && [ "${__Shell}" != "false" ]; then
+    SHELL_RC="$HOME/.${__Shell}rc"
+    
+    # if [ ! -f "${SHELL_RC}" ]; then
+    #     SHELL_RC=false
+    # fi
+else
+    SHELL_RC=false
+fi
+
+MYCE_RUNCOM=${MYCE_RUNCOM:-$SHELL_RC}
 
 # If set to 'FULL', then unset so that the full width is used
 if [[ "${COLUMN_WIDTH}" == "FULL" ]]; then
@@ -84,9 +106,10 @@ function log() {
 }
 
 
-while getopts 'dv' option; do
+while getopts 'dvc' option; do
     # echo "Option: ${option}"
     case ${option} in
+        c ) MYCE_RUNCOM=false ;;
         d ) DRYRUN=true
             log 0 "---- THIS IS A DRYRUN! ----\n"
             ;;
@@ -112,7 +135,40 @@ function runCMD() {
     local -a full_cmd=( "$cmd_string" "$@" )
 
     log 3 "Executing: ${full_cmd[*]}"
-    eval "${full_cmd[@]}"
+
+    # Before executing the command, run the shell rc file to support aliases and other configurations
+    if [[ "${MYCE_RUNCOM}" != "false" ]] && [ -f "${MYCE_RUNCOM}" ]; then
+        log 1 "MYCE_RUNCOM: Sourcing shell's run commands file - '${MYCE_RUNCOM}'..."
+        source "${MYCE_RUNCOM}" &> /dev/null
+        shopt -s expand_aliases
+    else
+        log 1 "MYCE_RUNCOM file not found or set to 'false'"
+        log 2 "MYCE_RUNCOM = ${MYCE_RUNCOM}"
+    fi
+
+    # Original execution of the command
+    # eval "${full_cmd[@]}"
+    
+
+    # Attempt to filter STDERR, but has some false positives
+    # eval "${full_cmd[@]}" 2> >(grep -v "^$0" || echo "Unknown Command" >&2)
+    
+
+    # Filter STDERR output provide a helpful error message if 
+    # problem originated by this script (the eval command)
+    # but allow STDERR from the executed command to pass through
+    eval "${full_cmd[@]}" 2> >(awk -v prefix="$0" '{ if ($0 ~ "^" prefix) { print "Unknown key or command. See `'$0' list` for known keys" } else { print $0 } }' >&2)
+
+
+    # Alternative is to use a named pipe to filter responses
+    # tmpfile="/tmp/fifo.$$"
+    # mkfifo $tmpfile
+    
+    # #Filter STDERR and pass to the terminal
+    # grep -v "^$0" < $tmpfile >&2 &
+    
+    # eval "${full_cmd[@]}" 2> $tmpfile
+    # rm $tmpfile
 }
 
 # Function to add or update a key-value pair in an INI file
@@ -489,6 +545,11 @@ function list_keys() {
         shift
     done
 
+    # Handle when column util is not installed
+    if [[ $(type -t column) != "file" ]]; then
+        use_column=false
+    fi
+
     if load_my_custom_files; then
         log 0 "The following commands are available:"
 
@@ -583,6 +644,12 @@ function print_key_entries_in_file() {
     log 2 "" # Add some spacing in extra verbose mode
     IFS=$OLD_IFS
 
+    if [[ $(type -t column) == "file" ]]; then
+        columnCMD='column -t -s "|"'
+    else
+        columnCMD="sed 's/|/\t/g'"
+    fi
+
     # After collecting all lines, print the contents as a table using column
     if [[ -z ${foundFileDefs[@]} ]]; then
         # Nothing found in this file
@@ -592,7 +659,7 @@ function print_key_entries_in_file() {
         for line in "${foundFileDefs[@]}"; do
             # Replace any line wrap chars with an escaped version for the print
             log 1 "|${line//\\n/\\\\n}"
-        done | column -t -s "|"
+        done | eval ${columnCMD}
         log 1 ""
     fi
 }
@@ -640,6 +707,12 @@ function get_key_definition() {
         return 1
     fi
 
+    if [[ $(type -t column) == "file" ]]; then
+        columnCMD='column -t -s "|"'
+    else
+        columnCMD="sed 's/|/\t/g'"
+    fi
+
     # After collecting all lines, print the contents as a table using column
     if [[ -z ${foundDefs[@]} ]]; then
         log 1 "  Not found\n"
@@ -648,7 +721,7 @@ function get_key_definition() {
         for line in "${foundDefs[@]}"; do
             # Replace any line wrap chars with an escaped version for the print
             log 0 "${line//\\n/\\\\n}"
-        done | column -t -s "|"
+        done | eval ${columnCMD}
     fi
 
     log 1 "\n\e[3m** NOTE: If multiple definitions were found, the last definition shown is used\e[0m\n"
@@ -861,7 +934,7 @@ function update_script() {
         log 0 "This should be run as root.  Attempting to elevate permissions..."
 
         # Re-run this command as sudo
-        if command -v dzdo >/dev/null 2>&1; then
+        if [[ $(type -t dzdo) == "file" ]]; then
             runCMD dzdo "$0" "$__origArgs"
         else
             runCMD sudo "$0" "$__origArgs"
@@ -869,7 +942,7 @@ function update_script() {
         exit
     fi
     # NOTE: Root Level if here
-    
+
     download_latest_release "${temp_file}" "${repo}"
 
     log 0 "Updating from v${__Version} to ${latest_tag}..."
@@ -961,6 +1034,12 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 26.2.13          Provides a user-friendly error message if the given command is not known, while
+                    allowing STD_ERR output from executed commands to be passed on.
+                    Changed to using `type` command for checking if utility exist.
+                    Sources the shell's rc file to allow aliases defined there to be used.
+                    - The file to source can be specified by setting 'MYCE_RUNCOM' (default is ~/.bashrc)
+                    - This can be disabled by setting 'MYCE_RUNCOM=false'
  - 26.2.6           Added support for hiding variables (all uppercase letters) defined in sections.
                     `update` command now retrieves latest released instead of latest committed.
                     bash-completion file installed if the expected directory exists

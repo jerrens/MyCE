@@ -160,6 +160,12 @@ In dry run mode, the expanded command will be printed, but not executed
 
 Example: `my -d build`
 
+`-c`:
+Include this option if you don't want your shell rc file to expand for this execution.
+To always disable sourcing the shell rc file, see [MYCE_RUNCOM](#myce_runcom).
+
+Example: `my -c build`
+
 
 ## Command Lookup Process
 
@@ -308,6 +314,17 @@ Set the value of this variable to the desired file name if you wish to override 
 
 By default, the `list` action will use a column width of 120 when printing aliases.
 Set the value of this variable to the desired width, or to `FULL` to use the full terminal width.
+
+### MYCE_RUNCOM
+
+By default, MyCE will source the shell's rc file (eg. `~/.bashrc`, `~/.zshrc`, `~/.kshrc`) to the subshell so that user customizations defined there can be used.
+Set the value of this variable to an alternative path if the file you want sourced is different from the default shell path (eg. `export MYCE_RUNCOM=~/.profile`).
+Set the value of this variable to `false` if you do not want to source any rc file
+
+Related to the `-c` [command line option](#options)
+
+To debug, either view verbose help (`my -vv help`) or search the output of a verbose command execution for the variable name (`my -vvv echo "Hello" | grep "MYCE_RUNCOM"`)
+
 
 
 ## Example Workflow
