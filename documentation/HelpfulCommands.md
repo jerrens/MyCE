@@ -96,58 +96,70 @@ probe=nc -z localhost $1 && echo "port open" || echo "port closed"
 ping=nc -zv $1 $2 2>&1 | grep "Connect"
 ```
 
-## Podman (Docker)
+## Containerization (Podman/Docker)
 ```ini
 # These may be defined/overwritten in other directories
 POD_YAML=pod.yaml
 WORKSPACE_ROOT=$(dirname ${POD_YAML})
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+CONTAINER_ENGINE=podman
 
 WEB_CONTAINER=dev-pod-web
 MONGO_CONTAINER=dev-pod-mongodb
 
+# Ubuntu sandbox
+ubuntu=${CONTAINER_ENGINE} run -it --rm ubuntu:22.04 bash
+
+# Shell
+zsh=${CONTAINER_ENGINE} run -it --rm --volume ${PWD}:/mnt/host --workdir /mnt/host docker.io/ohmyzsh/zsh:latest zsh
+
 [pod]
-attach=podman exec -ti $1 bash
-up=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube "${POD_YAML}" && popd > /dev/null
+attach=${CONTAINER_ENGINE} exec -ti $1 bash
+run=${CONTAINER_ENGINE} run -it --rm $1 ${2:-bash}
+up=pushd "$WORKSPACE_ROOT" > /dev/null && ${CONTAINER_ENGINE} play kube "${POD_YAML}" && popd > /dev/null
 up+=${pod.up} && sleep 3 && ${pod.ls}
-down=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube "${POD_YAML}" --down && popd > /dev/null
+down=pushd "$WORKSPACE_ROOT" > /dev/null && ${CONTAINER_ENGINE} play kube "${POD_YAML}" --down && popd > /dev/null
 down+=${pod.down} && sleep 3 && ${pod.ls}
-replace=pushd "$WORKSPACE_ROOT" > /dev/null && podman play kube "${POD_YAML}" --replace && popd > /dev/null
+replace=pushd "$WORKSPACE_ROOT" > /dev/null && ${CONTAINER_ENGINE} play kube "${POD_YAML}" --replace && popd > /dev/null
 replace+=${pod.replace} && sleep 3 && ${pod.ls}
-stats=podman stats --no-stream
-link=ln -sfn $(realpath --relative-to="${HOME}/code/podman" ${REPO_ROOT}) ~/code/podman/repo-name
-checklink=ls -l ~/code/podman | awk '{if ($1 ~ /^l/) print $9 " -> " $11}'
+stats=${CONTAINER_ENGINE} stats --no-stream
+link=ln -sfn $(realpath --relative-to="${HOME}/code/${CONTAINER_ENGINE}" ${REPO_ROOT}) ~/code/${CONTAINER_ENGINE}/cns_v2.va.gov
+checklink=ls -l ~/code/${CONTAINER_ENGINE} | awk '{if ($1 ~ /^l/) print $9 " -> " $11}'
+
 
 # Different forms of showing containers (simple, simple combo, verbose combo)
-ls=podman ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
-vol.ls=podman volume ls --format "table  {{.Driver}}  {{.Mountpoint}} {{.Name}}"
+ls=${CONTAINER_ENGINE} ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
+vol.ls=${CONTAINER_ENGINE} volume ls --format "table  {{.Driver}}  {{.Mountpoint}} {{.Name}}"
 ll=echo -e "Containters:\n-----------------------------------------" && ${pod.ls} && echo -e "\nVolumes:\n-----------------------------------------" && ${pod.vol.ls}
-la=echo -e "Containters:\n-----------------------------------------" && podman ps --all && echo -e "\nVolumes:\n-----------------------------------------" && ${pod.vol.ls}
+la=echo -e "Containters:\n-----------------------------------------" && ${CONTAINER_ENGINE} ps --all && echo -e "\nVolumes:\n-----------------------------------------" && ${pod.vol.ls}
 
 # Generic form (define in ~/)
-log=podman logs --follow --tail=50
+log=${CONTAINER_ENGINE} logs --follow --tail=50
 
 # Specific form (override in repo directory)
-log=podman logs $WEB_CONTAINER
-log+=podman logs --tail 100 --follow $WEB_CONTAINER
+log=${CONTAINER_ENGINE} logs $WEB_CONTAINER
+log+=${CONTAINER_ENGINE} logs --tail 100 --follow $WEB_CONTAINER
 
 
 # Interact with containers
-con=podman exec -it $WEB_CONTAINER bash
+con=${CONTAINER_ENGINE} exec -it $WEB_CONTAINER bash
 xdebug.log=${pod.con} -c "tail --follow --lines=25 /tmp/xdebug.log"
-web.restart=podman restart $WEB_CONTAINER
+web.restart=${CONTAINER_ENGINE} restart $WEB_CONTAINER
 
 [pod.mongo]
-con=podman exec -it $MONGO_CONTAINER bash
-sh=podman exec --tty --interactive $MONGO_CONTAINER mongosh -u adminuser --port 27017
+con=${CONTAINER_ENGINE} exec -it $MONGO_CONTAINER bash
+sh=${CONTAINER_ENGINE} exec --tty --interactive $MONGO_CONTAINER mongosh -u adminuser --port 27017
 
 
 # Launch Utilitie in a Container
 [mongo]
-con=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh bash
-sh=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongosh
-export=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongoexport
-restore=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongorestore
-dump=podman run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongodump
+con=${CONTAINER_ENGINE} run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh bash
+sh=${CONTAINER_ENGINE} run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongosh
+export=${CONTAINER_ENGINE} run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongoexport
+restore=${CONTAINER_ENGINE} run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongorestore
+dump=${CONTAINER_ENGINE} run --rm --tty --interactive --volume $(pwd):/mnt/host --workdir "/mnt/host" docker.io/alpine/mongosh mongodump
+
 ```
 
 ## Python
