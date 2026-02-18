@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE mkfifo
 
 __Author="Jerren Saunders"
-__Version=26.2.14
+__Version=26.2.18
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -349,12 +349,23 @@ function process_ini_file() {
     log 1 "Loading file: $1"
     local section=""
     while IFS= read -r line <&3 || [[ -n "$line" ]]; do
-        # echo " Line1 - $line"
+        # If the line ends with a continuation character '\', then read the next line and append it
+        while [[ "$line" =~ \\$ ]]; do
+            # Remove the trailing backslash and append the next line
+            line="${line%\\}"
+            if IFS= read -r nextLine <&3; then
+                line+="$nextLine"
+            else
+                break
+            fi
+        done
 
         # Skip empty lines and comments
         if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*# ]]; then
             continue
         fi
+
+        log 2 " Entry - $line"
 
         # Check for include statements
         if [[ "$line" =~ ^include[[:space:]]+(.+)$ ]]; then
@@ -1080,6 +1091,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 26.2.18          Added support for multiline entries in the .myCommand file using a continuation character '\'
  - 26.2.14          Enhanced `update` subcommand to support targeting a specific release tag
  - 26.2.13          Provides a user-friendly error message if the given command is not known, while
                     allowing STD_ERR output from executed commands to be passed on.

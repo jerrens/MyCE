@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
+# spell-checker:ignore MyCE
+
+from datetime import datetime
+import os
+import re
+import shutil
 import subprocess
 import sys
-import re
 
 exe="./my"
+
 
 # Array of command -> expected output pairs
 test_cases = {
@@ -14,6 +20,9 @@ test_cases = {
     "echo_bin 42": "42",
 
     "section.tmp": "hello",
+
+    # Ensure the token is properly read and expanded into the command
+    "toolA.health": "^curl .* Bearer 0123456789ABCDEF",
 
     "test.sub1": "^$",
     "test.sub1 John": "^John$",
@@ -60,6 +69,15 @@ test_cases = {
 
     "test.nested.sub Alice Blue": "Testing Nested Subst\n\x1b\[31mAlice!\x1b\[0m Other Blue",
 
+    "multiline": "This is a multi-line command that should be treated as a single command",
+    "multi.cmd1": "First command",
+    "multi.cmd2": "Second command",
+    "multi.cmd3": "^Third command with a continuation \s{4}\(leading whitespace preserved\) text from line 2 and line 3",
+    "multi.cmd4": "Fourth command with a continuation text from line 2\nand line 3",
+    "multi.cmd5": "0\n2\n4\n6\n8\n10\n12\n14\n16\n18\n20",
+
+    "line.len 10": "^-{10}$",
+
     # Commands with ENV definitions
     "time": "^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [AP]M$",
     "timestamp": "^\d{8}_\d{6}$",
@@ -82,9 +100,7 @@ test_cases = {
     },
 
     "-c -vv time" : "MYCE_RUNCOM file not found or set to 'false'",
-}
 
-test_cases = {
     "Advanced Test": {
         "cmd": "-d alt", # Overrides the command given to MyCE.  If not defined, the test key is used as with simple test
         "pre": "echo", # OPTIONAL: Prefix to include before the MyCE exe.  This may be used to 'echo' or in-line variables
@@ -92,17 +108,45 @@ test_cases = {
         "env": {}, # OPTIONAL: Dictionary of environment variables to set in the subshell for the test
         "description": "Optional description", # OPTIONAL: A description to print in the test output
     },
+
+    # Viewing definitions
+    "definition timestamp": ".myCommands:\d{1,3}\s+timestamp\s+TZ=",
+
+    # Viewing variables
+    "Should not show all-cap root variables": {
+        "cmd": "list -l",
+        "see": "(?!.*CONST)", # Should not show 'CONST' variable
+    },
+    
+    "Should not show all-cap section variables": {
+        "cmd": "list -l",
+        "see": "section.SHOULD_(?!.*BE_HIDDEN)", # Should not show 'SHOULD_BE_HIDDEN' variable
+    },
+
+    "Should show all-cap variables with -a": {
+        "cmd": "list -l -a",
+        "see": "CONST",
+    },
+    
+    "Should show all-cap section variables with -a": {
+        "cmd": "list -l -a",
+        "see": "section.SHOULD_BE_HIDDEN",
+    },
+
+
 }
 
-failing_keys = [  # Keys of tests that are currently failing
-    'test.sub1',
-    'test.subdef1',
-    'test.subdef2',
-    'test.subdef3',
-    'test.subdef4',
+
+# Keys of tests that should be run.  If empty, all tests will be run
+focus_run_test = [  
+    # Enter test key here to only run specific tests.  
+    # This is useful during development to focus on a specific test or subset of tests without running the entire suite.
+    
 ]
 
-# test_cases = {key: test_cases[key] for key in failing_keys}
+if len( focus_run_test) > 0:
+    test_cases = {key: test_cases[key] for key in focus_run_test}
+
 
 def run_tests():
     failed = 0
@@ -148,8 +192,8 @@ def run_tests():
             else:
                 print("\033[1;31m", end='')
                 print(f"✗ {command:<40} {description}")
-                print(f"    Expected: {expected_output}")
-                print(f"    Got:      {actual_output}")
+                print(f"    Expected: '{expected_output}'")
+                print(f"    Got:      '{actual_output}'")
                 print(f"    Command   {test_cmd}")
                 print("\033[0m", end='')
                 failed += 1
@@ -160,5 +204,26 @@ def run_tests():
     return failed
 
 if __name__ == "__main__":
-    failed = run_tests()
+    # Backup .myCommands before running tests
+    my_command_backup = ".myCommands.bak-" + str(datetime.now().timestamp())
+    print(f"Creating backup of .myCommands at {my_command_backup}")
+    if os.path.exists(".myCommands"):
+        shutil.move(".myCommands", my_command_backup)
+
+    # Move .myCommands.test to .myCommands for testing
+    print("Setting up .myCommands for testing")
+    shutil.copy(".myCommands.test", ".myCommands")
+    print("Starting tests...\n")
+
+    # Run the tests
+    try:
+        failed = run_tests()
+    except Exception as e:
+        print(f"Error running tests: {e}")
+        failed = 1
+
+    # Restore original .myCommands after tests
+    print("\nRestoring original .myCommands")
+    shutil.move(my_command_backup, ".myCommands")
+
     sys.exit(failed)

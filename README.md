@@ -7,7 +7,7 @@
     }
 }
 -->
-<!-- spell-checker:ignore Myce sdiff -->
+<!-- spell-checker:ignore MyCE sdiff kshrc -->
 <div align="center"><img src="./logo/MyCEv2.png" alt="MyCE Logo"></div>
 
 # My Command Engine (MyCE)
@@ -55,6 +55,9 @@ Other files may be included by using the `include <FILE>` syntax.
 The path may be absolute or relative and should follow the same INI-style syntax.
 If you want to include `.myCommands` in source control, it is recommended that you take advantage of this feature to store your credentials in a separate file.
 
+Values may span multiple lines by ending the line with a `\` char.
+When using this continuation character, any whitespace at the beginning of the line will be preserved.
+
 Example `.myCommands` file:
 
 ```ini
@@ -68,6 +71,10 @@ DB_CONTAINER="pod-db"
 # Commands
 echo=echo "Custom Prefix: "
 npm="$LAST_CONTAINER npm"
+
+continuation=echo "This is a multi-line command \
+that should be treated as a single command"
+
 
 [db]
 backup=podman exec --interactive --tty --rm $DB_CONTAINER mongodump
@@ -200,7 +207,7 @@ The output will contain the full file path, line number, command reference (sect
 ### `update [diff] [latest|released|head|main|<TAG>]`:
 
 Easily pull down updates from the github repo.
-The file will automatically update the MyCE script (tpyically `/usr/local/bin`) and the permissions set to 755.
+The file will automatically update the MyCE script (typically `/usr/local/bin`) and the permissions set to 755.
 This command needs to be run with root level privileges.
 If not, it will attempt to elevate itself and prompt for a password if needed.
 
