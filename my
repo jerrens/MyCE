@@ -360,6 +360,32 @@ function process_ini_file() {
             fi
         done
 
+        # Heredoc: If the line ends with ''', then read until the next ''' and append it
+        if [[ "$line" =~ \'{3\}$ ]]; then
+            log 2 "Found Heredoc starting at line: $line"
+            line="${line%%\'\'\'}"
+            log 3 "Updated line: $line"
+            
+            {
+                while IFS= read -r nextLine || [ -n "$nextLine" ]; do
+                    if [[ "$nextLine" =~ \'{3\}$ ]]; then
+                        log 2 "----- Found Heredoc end: ------"
+                        nextLine="${nextLine%%\'\'\'}"
+                        line+="${nextLine}\n"
+                        break
+                    else
+                        log 3 "  Appending line: $nextLine"
+                        line+="${nextLine}\n"
+                        log 3 "    Updated line: $line"
+                    fi                    
+                done
+            } <&3
+            
+            # Remove trailing new line char
+            line="${line%\\n\\n}"
+            line="${line%\\n}"            
+        fi
+        
         # Skip empty lines and comments
         if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*# ]]; then
             continue
@@ -1092,6 +1118,7 @@ exit $?
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
  - 26.2.18          Added support for multiline entries in the .myCommand file using a continuation character '\'
+                    Heredoc support using ''' to allow for easier readability of multiline entries
  - 26.2.14          Enhanced `update` subcommand to support targeting a specific release tag
  - 26.2.13          Provides a user-friendly error message if the given command is not known, while
                     allowing STD_ERR output from executed commands to be passed on.
