@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE mkfifo
 
 __Author="Jerren Saunders"
-__Version=26.2.18
+__Version=26.2.19
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -347,6 +347,13 @@ function set_ini_value() {
 declare -A commands
 function process_ini_file() {
     log 1 "Loading file: $1"
+
+    # Detect the line break character for this file (LF vs CRLF) and warn the user if it is not LF
+    if grep --quiet $'\r' --max-count 1 "$1"; then
+        log 0 "\e[1;31mWARNING: Detected CRLF line endings in file '$1'.\nThis will cause issues when parsing and will be skipped.  Please convert the file to LF line breaks.\n\e[0m"
+        return 1
+    fi
+
     local section=""
     while IFS= read -r line <&3 || [[ -n "$line" ]]; do
         # If the line ends with a continuation character '\', then read the next line and append it
@@ -361,14 +368,14 @@ function process_ini_file() {
         done
 
         # Heredoc: If the line ends with ''', then read until the next ''' and append it
-        if [[ "$line" =~ \'{3\}$ ]]; then
+        if [[ "$line" =~ \'\'\'$ ]]; then
             log 2 "Found Heredoc starting at line: $line"
             line="${line%%\'\'\'}"
             log 3 "Updated line: $line"
             
             {
                 while IFS= read -r nextLine || [ -n "$nextLine" ]; do
-                    if [[ "$nextLine" =~ \'{3\}$ ]]; then
+                    if [[ "$nextLine" =~ \'\'\'$ ]]; then
                         log 2 "----- Found Heredoc end: ------"
                         nextLine="${nextLine%%\'\'\'}"
                         line+="${nextLine}\n"
@@ -1117,8 +1124,10 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
- - 26.2.18          Added support for multiline entries in the .myCommand file using a continuation character '\'
+ - 26.2.19          Added support for multiline entries in the .myCommand file using a continuation character '\'
                     Heredoc support using ''' to allow for easier readability of multiline entries
+                    BugFix: Lines with CRLF line endings cause parsing anomalies. 
+                    - Added line ending detection and provide user-friendly warning message about it being skipped
  - 26.2.14          Enhanced `update` subcommand to support targeting a specific release tag
  - 26.2.13          Provides a user-friendly error message if the given command is not known, while
                     allowing STD_ERR output from executed commands to be passed on.
