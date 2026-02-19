@@ -6,3 +6,4 @@ settings.json
 **/scratch*/**
 **/*.secret*
 **/.env
+**/*.bkp
