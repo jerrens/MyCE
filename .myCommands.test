@@ -1,10 +1,48 @@
 CONST="foo"
 BIN_ROOT=/bin
 
+# Include file
+include ./credentials.test
+
 tmp=echo ~/code/.myCommand
 echo_bin=$BIN_ROOT/echo
 
+time=TZ="${TIMEZONE:-America/New_York}" date +"%F %X"
+timestamp=TZ="${TIMEZONE:-America/New_York}" date +"%Y%m%d_%H%M%S"
+
+multiline=echo "This is a multi-line command \
+that should be treated as a single command"
+
+[multi]
+cmd1=echo "First command"
+cmd2=echo "Second \
+command"
+cmd3=echo "Third command with a continuation \
+    (leading whitespace preserved) text from line 2" \
+    "and line 3"
+cmd4=echo "Fourth command with a continuation" \
+    "text from line 2" \
+    && echo "and line 3"
+cmd5=seq \
+    0 \
+    2 \
+    20
+heredoc=echo -e '''
+"This is a heredoc test.
+It should be included in the value with line wraps
+    and indentation preserved."
+'''
+
+
+[line]
+len=printf '%*s\n' "$1" '' | tr ' ' '-'
+
+[toolA]
+health=echo curl -s -H "Authorization: Bearer ${toolA.APIKey}" https://api.example.com/status
+
 [section]
+SHOULD_BE_HIDDEN=echo "true"
+SHOULD_Be_Visible=echo "true"
 tmp=echo "hello"
 
 [test]
@@ -53,4 +91,3 @@ dblpos3=echo $15 $14 $13 $12 $11 $10 - $1 $3 $5 $7 $9
 
 [test.nested]
 sub=echo "Testing Nested Subst" && ${echo_bin} -e "\033[31m$1!\033[0m" "Other ${2:-Undefined}"
-

@@ -3,5 +3,7 @@
 .myCommands
 !.myCommands.example
 settings.json
+**/scratch*/**
 **/*.secret*
 **/.env
+**/*.bkp
