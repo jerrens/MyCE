@@ -1,6 +1,8 @@
 CONST="foo"
 BIN_ROOT=/bin
 
+THIS_DIR=__DIRECTORY__
+
 # Include file
 include ./credentials.test
 
@@ -91,3 +93,6 @@ dblpos3=echo $15 $14 $13 $12 $11 $10 - $1 $3 $5 $7 $9
 
 [test.nested]
 sub=echo "Testing Nested Subst" && ${echo_bin} -e "\033[31m$1!\033[0m" "Other ${2:-Undefined}"
+
+[dir]
+path=echo __DIRECTORY__

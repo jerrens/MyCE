@@ -51,14 +51,39 @@ Running `my server.start` will execute docker-compose up.
 
 The `.myCommands` files uses INI-style sections to allow optional grouping, and key-value pairs where each key is an alias for a command, and the value is the corresponding command.
 
+### Constants
+
+Keys that are to be used internally to store reusable values in other commands (not commands to be executed) can be defined using all capital letters and the underscore character (`[A-Z_]`).
+Keys that are fully uppercase are:
+* Ignored by default by the `list` command (use `-a` flag to view)
+* Cannot not be executed directly (ie. `my CONST`)
+* Can be referenced in other commands using the following syntax: `build=pushd "$WORKSPACE_ROOT" && ...`
+
+If you wish to view the evaluated value of a constant, you can use the dry-run flag (ie. `my -d CONST`).
+Constants are also included in the output of the `definition` location action.
+
+#### Importing other files
+
 Other files may be included by using the `include <FILE>` syntax.
 The path may be absolute or relative and should follow the same INI-style syntax.
 If you want to include `.myCommands` in source control, it is recommended that you take advantage of this feature to store your credentials in a separate file.
 
-Values may span multiple lines by ending the line with a `\` char.
-When using this continuation character, any whitespace at the beginning of the line will be preserved.
+#### Multi-line Commands
 
-Example `.myCommands` file:
+Values may span multiple lines by ending the line with a `\` char or using the `'''` heredoc style.
+When using either of these continuation forms, any whitespace at the beginning of the consecutive line(s) will be preserved.
+
+#### Magic/Built-In Constants
+
+While most variables are not expanded until execution time (after all `.myCommands` files have been processed and merged), there are special variables that are expanded when parsing through `.myCommands` file entries.
+These magic constants allow dynamically setting values based on the current details of the `.myCommands` file.
+
+##### `__DIRECTORY__`
+
+References to this magic constant will be replaced with the abolute path of the directory the current `.myCommands` file is stored (ie. `dirname .myCommands`).
+This can be used to set a constant (like `WORKSPACE_ROOT`) inside a `.myCommands` file in the root of your project workspace, that can be used in command entries that need to be executed from the workspace root directory regardless of how deep in the workspace directory tree you may be.
+
+#### Example `.myCommands` file
 
 ```ini
 # Include other files
@@ -68,6 +93,8 @@ include credentials.secret
 LAST_CONTAINER="podman exec -it"
 DB_CONTAINER="pod-db"
 
+WORKSPACE_ROOT=__DIRECTORY__
+
 # Commands
 echo=echo "Custom Prefix: "
 npm="$LAST_CONTAINER npm"
@@ -75,6 +102,13 @@ npm="$LAST_CONTAINER npm"
 continuation=echo "This is a multi-line command \
 that should be treated as a single command"
 
+heredoc=echo -e '''
+"This is a heredoc multiline value.
+It will be included in the value with line wraps
+    and indentation preserved."
+'''
+
+deploy=${WORKSPACE_ROOT}/vendor/bin/envoy run deploy
 
 [db]
 backup=podman exec --interactive --tty --rm $DB_CONTAINER mongodump

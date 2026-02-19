@@ -135,7 +135,9 @@ test_cases = {
         "see": "section.SHOULD_BE_HIDDEN",
     },
 
-
+    # Special Variables
+    "dir.path": os.path.dirname(os.path.abspath(__file__)),
+    "-d THIS_DIR": "CMD: " + os.path.dirname(os.path.abspath(__file__)),
 }
 
 
