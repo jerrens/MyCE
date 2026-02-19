@@ -27,7 +27,11 @@ cmd5=seq \
     0 \
     2 \
     20
-
+heredoc=echo -e '''
+"This is a heredoc test.
+It should be included in the value with line wraps
+    and indentation preserved."
+'''
 
 
 [line]

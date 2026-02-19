@@ -76,6 +76,8 @@ test_cases = {
     "multi.cmd4": "Fourth command with a continuation text from line 2\nand line 3",
     "multi.cmd5": "0\n2\n4\n6\n8\n10\n12\n14\n16\n18\n20",
 
+    "multi.heredoc": "^This is a heredoc test.\nIt should be included in the value with line wraps\n    and indentation preserved.",
+
     "line.len 10": "^-{10}$",
 
     # Commands with ENV definitions
