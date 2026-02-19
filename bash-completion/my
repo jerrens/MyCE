@@ -20,11 +20,11 @@ _my_autocomplete() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     actions="definition list help version update set"
 
-    # echo "cur = ${cur}" >> ~/my-autocomplete.log
+    # echo "cur = ${cur}" >> /tmp/my-autocomplete.log
 
     if ((COMP_CWORD == 1)); then
         COMPREPLY=( $(compgen -W "${actions} ${_cmds}" -- "${cur}") )
-        # echo "  Reply ${COMPREPLY}" >> ~/my-autocomplete.log
+        # echo "  Reply ${COMPREPLY}" >> /tmp/my-autocomplete.log
         return 0;
     fi
 
@@ -50,20 +50,27 @@ _my_autocomplete() {
             list)
                 COMPREPLY=( $(compgen -W "-l -a" -- "${cur}") )
                 return 0;;
+
             #set)
                 # Show available variables from the .myCommand files
                 #if ((COMP_CWORD >= 3)); then
                 #    COMPREPLY=( $(compgen -W "todo" == ${cur}) )
                 #fi
                 #return 0;;
+            
+            update)
+                # echo "  Current Entry: ${cur}" >> /tmp/my-autocomplete.log
+                COMPREPLY=( $(compgen -W "diff main head latest release" -- "${cur}") )
+                # echo "  Reply ${COMPREPLY}" >> /tmp/my-autocomplete.log
+                return 0;;
 
-            help|verson|update)
+            help|version)
                 # No other options expected
                 return 0;;
 
             *)
                 COMPREPLY=( $(compgen -W "${_cmds}" -- "${cur}") )
-                # echo "  Reply ${COMPREPLY}" >> ~/my-autocomplete.log
+                # echo "  Reply ${COMPREPLY}" >> /tmp/my-autocomplete.log
                 return 0;;
         esac
     fi
@@ -72,5 +79,5 @@ _my_autocomplete() {
     return 0
 }
 
-# echo "Loading my autocomplete" >> ~/my-autocomplete.log
+# echo "Loading my autocomplete" >> /tmp/my-autocomplete.log
 complete -o default -F _my_autocomplete my
