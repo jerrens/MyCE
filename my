@@ -446,6 +446,15 @@ function process_ini_file() {
             key="${section}.${key}"
         fi
 
+        # Replace any special variables in the value with their actual values
+        # __DIRECTORY__ - The directory of the current file being processed
+        if [[ "$value" =~ .*__[A-Z_]+__.* ]]; then
+            log 2 "    Updating special variables in value: $value"
+            value="${value//__DIRECTORY__/$(dirname "$1")}"
+
+            log 2 "    Final value after special variable replacement: $value"
+        fi
+
         # Before adding the key-value pair to the associative array,
         # add the key to the indexed array to preserve the order.
         if [[ ! -v commands["$key"] ]]; then
@@ -1126,6 +1135,7 @@ exit $?
 /dev/null <<EOT
  - 26.2.19          Added support for multiline entries in the .myCommand file using a continuation character '\'
                     Heredoc support using ''' to allow for easier readability of multiline entries
+                    Added Magic Constant `__DIRECTORY` to allow referencing the directory of the .myCommand file being processed
                     BugFix: Lines with CRLF line endings cause parsing anomalies. 
                     - Added line ending detection and provide user-friendly warning message about it being skipped
  - 26.2.14          Enhanced `update` subcommand to support targeting a specific release tag
