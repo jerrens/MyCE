@@ -151,23 +151,26 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    my [OPTIONS] [help | version | set | list [-l] | KEY [args...]]
+    my [OPTIONS] [help | version | set | list [-l] [-a] [PATTERN] | KEY [args...]]
 
-        <KEY> [...args]     The key of the command to run
+        <KEY> [...args]             The key of the command to run
 
-        list [-l] [-a]      List the available command keys.
-                            Include the '-l' arg to list one key per line.  Default is column view.
-                            Include the '-a' arg to include variables (uppercase)
+        list [-l] [-a] [PATTERN]    List the available command keys.
+                                    Include the '-l' arg to list one key per line.  Default is column view.
+                                    Include the '-a' arg to include variables (uppercase)
+                                    Include a PATTERN to filter the results.
+                                        Use grep pattern syntax (e.g., `my list prod`)
 
-        definition <key>    Identifies the file(s) the given key exist in.
+        definition <key>            Identifies the file(s) the given key exist in.
 
-        set <key> <command>  Adds or updates the 'key' to the '.myCommands' file in the current directory.
-                             The given command will be used whenever called from this level or a descendant.
+        set <key> <command>         Adds or updates the 'key' to the '.myCommands' file in the current directory.
+                                    The given command will be used whenever called from this level or a descendant.
 
-        update [diff]       Update the script with the latest version.  If 'diff' is given, then show the changes
+        update [diff]               Update the script with the latest version.
+                                    If 'diff' is given, then show the changes
 
-        help        Show usage
-        version     Show version number
+        help                        Show usage
+        version                     Show version number
 
     OPTIONS:
         -c      Run the command without sourcing the default shell rc file
@@ -176,7 +179,7 @@ USAGE:
 
 
  By: Jerren Saunders
- Version: 26.2.14
+ Version: 26.2.23
 ```
 
 ### `version`:
@@ -206,7 +209,7 @@ Will be stored as:
 key=echo "Hello World"
 ```
 
-### `list [-l] [-a]`:
+### `list [-l] [-a] [PATTERN]`:
 
 Can't remember what you used as the key?
 Just enter `my list` to view the available commands.
@@ -222,6 +225,15 @@ projA.env.view                  pod.replace                     test.dblpos1
 projB.env.backup                pod.replace+                    test.dblpos2
 projB.env.diff                  pod.run                         test.dblpos3
 ```
+
+If you remember part of the command, add a grep pattern as an option filter the responses
+
+```shell
+>$ my list ^projB
+The following commands are available:
+projB.env.backup                projB.env.diff
+```
+
 
 ### `definition <cmd>`:
 

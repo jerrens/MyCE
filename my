@@ -25,23 +25,26 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    ${__ScriptName} [OPTIONS] [help | version | set | list [-l] | KEY [args...]]
+    ${__ScriptName} [OPTIONS] [help | version | set | list [-l] [-a] [PATTERN] | KEY [args...]]
 
-        <KEY> [...args]     The key of the command to run
+        <KEY> [...args]             The key of the command to run
 
-        list [-l] [-a]      List the available command keys.
-                            Include the '-l' arg to list one key per line.  Default is column view.
-                            Include the '-a' arg to include variables (uppercase)
+        list [-l] [-a] [PATTERN]    List the available command keys.
+                                    Include the '-l' arg to list one key per line.  Default is column view.
+                                    Include the '-a' arg to include variables (uppercase)
+                                    Include a PATTERN to filter the results.
+                                        Use grep pattern syntax (e.g., \`my list prod\`)
 
-        definition <key>    Identifies the file(s) the given key exist in.
+        definition <key>            Identifies the file(s) the given key exist in.
 
-        set <key> <command>  Adds or updates the 'key' to the '${MY_CUSTOM_FILE}' file in the current directory.
-                             The given command will be used whenever called from this level or a descendant.
+        set <key> <command>         Adds or updates the 'key' to the '${MY_CUSTOM_FILE}' file in the current directory.
+                                    The given command will be used whenever called from this level or a descendant.
 
-        update [diff]       Update the script with the latest version.  If 'diff' is given, then show the changes
+        update [diff]               Update the script with the latest version.
+                                    If 'diff' is given, then show the changes
 
-        help        Show usage
-        version     Show version number
+        help                        Show usage
+        version                     Show version number
 
     OPTIONS:
         -c      Run the command without sourcing the default shell rc file
@@ -372,7 +375,7 @@ function process_ini_file() {
             log 2 "Found Heredoc starting at line: $line"
             line="${line%%\'\'\'}"
             log 3 "Updated line: $line"
-            
+
             {
                 while IFS= read -r nextLine || [ -n "$nextLine" ]; do
                     if [[ "$nextLine" =~ \'\'\'$ ]]; then
@@ -384,15 +387,15 @@ function process_ini_file() {
                         log 3 "  Appending line: $nextLine"
                         line+="${nextLine}\n"
                         log 3 "    Updated line: $line"
-                    fi                    
+                    fi
                 done
             } <&3
-            
+
             # Remove trailing new line char
             line="${line%\\n\\n}"
-            line="${line%\\n}"            
+            line="${line%\\n}"
         fi
-        
+
         # Skip empty lines and comments
         if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*# ]]; then
             continue
@@ -478,7 +481,7 @@ function load_my_custom_files() {
     # Start in the current directory and move up the directory tree
     declare -a file_paths
     dir=$(pwd)
-    
+
     # Find all files in the directory tree
     log 1 "Searching for ${MY_CUSTOM_FILE} files in the directory tree..."
     while [ "$dir" != "/" ]; do
@@ -578,12 +581,13 @@ function set_key_value() {
 
 # Function to list all keys from the ${MY_CUSTOM_FILE} files in the current directory tree
 # If the -l argument is given, output will not be piped to column.
-# NOTE: Only keys beginning with a lower-case letter will be printed.
+# NOTE: Only keys beginning with a lower-case letter will be printed unless `-a` option is specified
 #  Keys starting with uppercase are considered variables
 function list_keys() {
     local -r indent="    "
     local use_column=true
     local include_const=false
+    local filter_pattern=""
 
     # Check for args
     while [[ $# -gt 0 ]]; do
@@ -595,11 +599,13 @@ function list_keys() {
                 include_const=true;;
 
             *)
-                log 0 "Unknown argument: $1\n";;
+                filter_pattern="$1";;
         esac
 
         shift
     done
+
+    log 1 "Filter Pattern: $filter_pattern"
 
     # Handle when column util is not installed
     if [[ $(type -t column) != "file" ]]; then
@@ -607,12 +613,6 @@ function list_keys() {
     fi
 
     if load_my_custom_files; then
-        log 0 "The following commands are available:"
-
-        if [ -v COLUMN_WIDTH ]; then
-            COLUMN_ARG="-c ${COLUMN_WIDTH}"
-        fi
-
         # Determine if variables (uppercase) words should be included
         if [[ "$include_const" == "true" ]]; then
             log 1 "Including Vars"
@@ -622,13 +622,33 @@ function list_keys() {
             grepCMD='grep "\\.\?[^A-Z_-]\+$"'
         fi
 
-        # Determine if output should be formatted in columns or a list
-        if [[ "$use_column" == true ]]; then
-            outputCMD="column ${COLUMN_ARG}"
-        else
-            outputCMD='sed "s/^/${indent}/"'
+        local words=$(printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort)
+
+        # Apply a filter if a partial word was given (for autocomplete)
+        if [[ -n "$filter_pattern" ]]; then
+            words=$(echo "$words" | grep "${filter_pattern}")
         fi
-        printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort | eval ${outputCMD}
+
+        # If there are no words, then print "Nothing Found"
+        if [[ -z "$words" ]]; then
+            log 0 "No commands found matching the filter '${filter_pattern}'"
+        else
+             # Determine if output should be formatted in columns or a list
+            if [[ "$use_column" == true ]]; then
+                if [ -v COLUMN_WIDTH ]; then
+                    COLUMN_ARG="-c ${COLUMN_WIDTH}"
+                fi
+
+                outputCMD="column ${COLUMN_ARG}"
+            else
+                outputCMD='sed "s/^/${indent}/"'
+            fi
+
+            log 0 "The following commands are available:"
+            echo "$words" | eval ${outputCMD}
+
+            # printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort | eval ${outputCMD}
+        fi
 
     else
         log 1 "No ${MY_CUSTOM_FILE} file was found in the current directory tree."
@@ -1138,10 +1158,11 @@ exit $?
 /dev/null <<EOT
  - 26.2.23          BugFix: Legacy named .myCommand file in the home directory was not found if executing outside of the home directory tree
                     BugFix: `update` action prompts in a (hidden) sub shell to overwrite existing files
+                    Added support for grep pattern to `list` action to filter results (e.g., `my list partial`)
  - 26.2.19          Added support for multiline entries in the .myCommand file using a continuation character '\'
                     Heredoc support using ''' to allow for easier readability of multiline entries
                     Added Magic Constant `__DIRECTORY` to allow referencing the directory of the .myCommand file being processed
-                    BugFix: Lines with CRLF line endings cause parsing anomalies. 
+                    BugFix: Lines with CRLF line endings cause parsing anomalies.
                     - Added line ending detection and provide user-friendly warning message about it being skipped
  - 26.2.14          Enhanced `update` subcommand to support targeting a specific release tag
  - 26.2.13          Provides a user-friendly error message if the given command is not known, while
