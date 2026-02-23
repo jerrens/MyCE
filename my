@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE mkfifo
 
 __Author="Jerren Saunders"
-__Version=26.2.19
+__Version=26.2.23
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -478,7 +478,7 @@ function load_my_custom_files() {
     # Start in the current directory and move up the directory tree
     declare -a file_paths
     dir=$(pwd)
-
+    
     # Find all files in the directory tree
     log 1 "Searching for ${MY_CUSTOM_FILE} files in the directory tree..."
     while [ "$dir" != "/" ]; do
@@ -497,13 +497,16 @@ function load_my_custom_files() {
     done
 
     # Always process the home dir file first (if it exists)
+    # Support both the current and legacy file name for backwards compatibility
     if [ -f "${HOME}/${MY_CUSTOM_FILE}" ]; then
         file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
-
-        # This may cause a duplicate entry (if executed in a subdirectory of ~)
-        # If this re-orders the list, then consider using https://stackoverflow.com/a/54797762/2136313 method
-        file_paths=($(printf "%s\n" "${file_paths[@]}" | uniq))
+    elif [ -f "${HOME}/${MY_CUSTOM_FILE%?}" ]; then
+        file_paths+=("${HOME}/${MY_CUSTOM_FILE%?}")
     fi
+
+    # Remove duplicate entries (if executed in a subdirectory of ~)
+    # If this re-orders the list, then consider using https://stackoverflow.com/a/54797762/2136313 method
+    file_paths=($(printf "%s\n" "${file_paths[@]}" | uniq))
 
     # Process the files in reverse order
     for (( idx=${#file_paths[@]}-1 ; idx>=0 ; idx-- )) ; do
@@ -1133,6 +1136,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 26.2.23          BugFix: Legacy named .myCommand file in the home directory was not found if executing outside of the home directory tree
  - 26.2.19          Added support for multiline entries in the .myCommand file using a continuation character '\'
                     Heredoc support using ''' to allow for easier readability of multiline entries
                     Added Magic Constant `__DIRECTORY` to allow referencing the directory of the .myCommand file being processed
