@@ -1051,7 +1051,7 @@ function update_script() {
 
     # Move 'my' and make it executable
     log 1 "Installing to ${install_path}..."
-    runCMD mv "/tmp/${archive_root}/my" "${install_path}"
+    runCMD mv --force "/tmp/${archive_root}/my" "${install_path}"
     log 1 "\nModifying permissions..."
     runCMD chmod a+x "${install_path}"
 
@@ -1059,7 +1059,7 @@ function update_script() {
     local completion_dir="/etc/bash_completion.d"
     if [[ -d "${completion_dir}" ]]; then
         log 1 "Updating auto-completion file at ${completion_dir}..."
-        runCMD mv "/tmp/${archive_root}/bash-completion/my" "${completion_dir}/my.bash_completion"
+        runCMD mv --force "/tmp/${archive_root}/bash-completion/my" "${completion_dir}/my.bash_completion"
         runCMD chmod 644 "${completion_dir}/my.bash_completion"
     fi
 
@@ -1137,6 +1137,7 @@ exit $?
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
  - 26.2.23          BugFix: Legacy named .myCommand file in the home directory was not found if executing outside of the home directory tree
+                    BugFix: `update` action prompts in a (hidden) sub shell to overwrite existing files
  - 26.2.19          Added support for multiline entries in the .myCommand file using a continuation character '\'
                     Heredoc support using ''' to allow for easier readability of multiline entries
                     Added Magic Constant `__DIRECTORY` to allow referencing the directory of the .myCommand file being processed
