@@ -138,6 +138,10 @@ test_cases = {
     # Special Variables
     "dir.path": os.path.dirname(os.path.abspath(__file__)),
     "-d THIS_DIR": "CMD: " + os.path.dirname(os.path.abspath(__file__)),
+
+    # Dry Run Special Syntax
+    "-d time": "THIS IS A DRYRUN.*CMD: ",
+    "time ?": "THIS IS A DRYRUN.*CMD: ",
 }
 
 
@@ -189,13 +193,13 @@ def run_tests():
             )
             actual_output = result.stdout.strip() + result.stderr.strip()
 
-            expected_pattern = re.compile(expected_output)
+            expected_pattern = re.compile(expected_output, re.DOTALL  )
 
             if expected_pattern.search(actual_output):
-                print(f"✓ {command:<40} {description}")
+                print(f"✓ {command:<60} {description}")
             else:
                 print("\033[1;31m", end='')
-                print(f"✗ {command:<40} {description}")
+                print(f"✗ {command:<60} {description}")
                 print(f"    Expected: '{expected_output}'")
                 print(f"    Got:      '{actual_output}'")
                 print(f"    Command   {test_cmd}")
