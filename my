@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE mkfifo
 
 __Author="Jerren Saunders"
-__Version=26.2.23
+__Version=26.2.24
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -160,7 +160,7 @@ function runCMD() {
     # Filter STDERR output provide a helpful error message if
     # problem originated by this script (the eval command)
     # but allow STDERR from the executed command to pass through
-    eval "${full_cmd[@]}" 2> >(awk -v prefix="$0" '{ if ($0 ~ "^" prefix) { print "Unknown key or command. See `'$0' list` for known keys" } else { print $0 } }' >&2)
+    eval "${full_cmd[@]}" 2> >(awk -v prefix="$0" '{ if ($0 ~ "^" prefix) { print "Unknown key or command. See `'$__AppName' list` for known keys" } else { print $0 } }' >&2)
 
 
     # Alternative is to use a named pipe to filter responses
