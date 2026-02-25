@@ -143,7 +143,7 @@ Don't worry if you forget the basics.
 Simply type `my help` to view the usage details.
 
 ```shell
-$> my help
+>$ my help
 
 This script will search the current directory tree for a file named '.myCommands', containing
 a key that matches the first argument.  If found, the value of that key will be used instead.
@@ -151,7 +151,7 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    my [OPTIONS] [help | version | set | list [-l] [-a] [PATTERN] | KEY [args...]]
+    my [OPTIONS] [help | version | set | list [-l] [-a] [PATTERN] | KEY [args...]] [?]
 
         <KEY> [...args]             The key of the command to run
 
@@ -159,15 +159,19 @@ USAGE:
                                     Include the '-l' arg to list one key per line.  Default is column view.
                                     Include the '-a' arg to include variables (uppercase)
                                     Include a PATTERN to filter the results.
-                                        Use grep pattern syntax (e.g., `my list prod`)
+                                        Use grep pattern syntax (e.g., \`my list prod\`)
 
         definition <key>            Identifies the file(s) the given key exist in.
 
-        set <key> <command>         Adds or updates the 'key' to the '.myCommands' file in the current directory.
+        set <key> <command>         Adds or updates the 'key' to the '${MY_CUSTOM_FILE}' file in the current directory.
                                     The given command will be used whenever called from this level or a descendant.
 
         update [diff]               Update the script with the latest version.
                                     If 'diff' is given, then show the changes
+
+        ?                           If the command ends with a '?' character, then dry-run mode will be enabled.
+                                    This is a special syntax for dry-run mode that can be quickly used to check the command.
+                                    Then use the UP arrow to recall the previous command and easily remove the dry-run syntax for execution.
 
         help                        Show usage
         version                     Show version number
@@ -175,11 +179,11 @@ USAGE:
     OPTIONS:
         -c      Run the command without sourcing the default shell rc file
         -v      Verbose Level (Multiple may be given to increase the verbosity)
-        -d      Dry Run.
+        -d      Dry Run.  A trailing '?' may also be used as a special syntax to enable dry-run mode.
 
 
  By: Jerren Saunders
- Version: 26.2.23
+ Version: 26.2.25
 ```
 
 ### `version`:
@@ -302,7 +306,7 @@ A dry run can be enabled by using the `-d` option.
 > In dry run mode, the expanded command will be printed, but not executed
 
 ```shell
-$> my -d pod.con
+>$ my -d pod.con
 ---- THIS IS A DRYRUN! ----
 
 CMD: podman exec -it my-container bash 
@@ -314,6 +318,24 @@ To always disable sourcing the shell rc file, see [MYCE_RUNCOM](#myce_runcom).
 
 ```shell
 my -c build
+```
+
+### `?`
+A shorthand to preview the command that will be expanded, but not actually run the command is available by adding a trailing ` ?` on the command.
+When a command that ends with `?` is detected, MyCE will interpret this as a request to print the final command to be executed (and will remove the '?' char).
+This shorthand syntax makes it easy to question the command that will be executed, then if it is the command you want, you can:
+1. Press UP-ARROW to recall the previous command from history
+1. Press BACKSPACE to remove the '?' char
+1. Press ENTER to execute the command
+
+```shell
+>$ my pod.con ?
+---- THIS IS A DRYRUN! ----
+
+CMD: podman exec -it my-container bash 
+>$ my pod.con 
+root@my-container:/var/www/html# 
+
 ```
 
 

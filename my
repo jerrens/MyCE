@@ -2,7 +2,7 @@
 # spell-checker:words dzdo sdiff MyCE mkfifo
 
 __Author="Jerren Saunders"
-__Version=26.2.24
+__Version=26.2.25
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -25,7 +25,7 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    ${__ScriptName} [OPTIONS] [help | version | set | list [-l] [-a] [PATTERN] | KEY [args...]]
+    ${__ScriptName} [OPTIONS] [help | version | set | list [-l] [-a] [PATTERN] | KEY [args...]] [?]
 
         <KEY> [...args]             The key of the command to run
 
@@ -43,13 +43,17 @@ USAGE:
         update [diff]               Update the script with the latest version.
                                     If 'diff' is given, then show the changes
 
+        ?                           If the command ends with a '?' character, then dry-run mode will be enabled.
+                                    This is a special syntax for dry-run mode that can be quickly used to check the command.
+                                    Then use the UP arrow to recall the previous command and easily remove the dry-run syntax for execution.
+
         help                        Show usage
         version                     Show version number
 
     OPTIONS:
         -c      Run the command without sourcing the default shell rc file
         -v      Verbose Level (Multiple may be given to increase the verbosity)
-        -d      Dry Run.
+        -d      Dry Run.  A trailing '?' may also be used as a special syntax to enable dry-run mode.
 
 
 EOT
@@ -121,6 +125,19 @@ while getopts 'dvc' option; do
     esac
 done
 shift $((OPTIND -1)) # Remaining args will be left
+
+
+# Check for the last arg to be a '?' (special dry run syntax)
+if [[ "${!#}" == "?" ]]; then
+    log 1 "Special Dry Run ending detected - Enabling Dry Run mode"
+    log 2 "  Arguments Before: ${*}"
+    DRYRUN=true
+    log 0 "---- THIS IS A DRYRUN! ----\n"
+    # Remove the last argument
+    set -- "${@:1:$(($#-1))}"
+
+    log 2 "  Arguments After: ${*}"
+fi
 
 
 # Either runs the command or prints the command that would be executed if DRYRUN is 'true'
@@ -1156,6 +1173,7 @@ exit $?
 ######################################
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 /dev/null <<EOT
+ - 26.2.25          Added special dry-run syntax - add ' ?' at the end of a command to print the command that would be executed
  - 26.2.23          BugFix: Legacy named .myCommand file in the home directory was not found if executing outside of the home directory tree
                     BugFix: `update` action prompts in a (hidden) sub shell to overwrite existing files
                     Added support for grep pattern to `list` action to filter results (e.g., `my list partial`)
