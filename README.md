@@ -1,17 +1,17 @@
 <!-- markdownlint-configure-file {
     "no-inline-html": {
-        "allowed_elements": [ "div" ]
+        "allowed_elements": [ "div", "img" ]
     },
     "no-multiple-blanks": {
         "maximum": 4
     }
 }
 -->
-<!-- spell-checker:ignore MyCE sdiff kshrc -->
-<div align="center"><img src="./logo/MyCEv2.png" alt="MyCE Logo"></div>
-
+<!-- spell-checker:ignore MyCE sdiff kshrc pushd -->
 # My Command Engine (MyCE)
 
+<!-- <div align="center"><img src="./logo/MyCEv2.png" alt="MyCE Logo"></div> -->
+<div align="center"><img src="./logo/MyCEv2.png" alt="MyCE Logo"></div>
 
 ## Overview
 
@@ -55,9 +55,10 @@ The `.myCommands` files uses INI-style sections to allow optional grouping, and 
 
 Keys that are to be used internally to store reusable values in other commands (not commands to be executed) can be defined using all capital letters and the underscore character (`[A-Z_]`).
 Keys that are fully uppercase are:
-* Ignored by default by the `list` command (use `-a` flag to view)
-* Cannot not be executed directly (ie. `my CONST`)
-* Can be referenced in other commands using the following syntax: `build=pushd "$WORKSPACE_ROOT" && ...`
+
+- Ignored by default by the `list` command (use `-a` flag to view)
+- Cannot not be executed directly (ie. `my CONST`)
+- Can be referenced in other commands using the following syntax: `build=pushd "$WORKSPACE_ROOT" && ...`
 
 If you wish to view the evaluated value of a constant, you can use the dry-run flag (ie. `my -d CONST`).
 Constants are also included in the output of the `definition` location action.
@@ -186,13 +187,13 @@ USAGE:
  Version: 26.2.25
 ```
 
-### `version`:
+### `version`
 
 Not sure if you have the latest version installed?
 Run `my version` and compare against the latest version on [GitHub](https://github.com/jerrens/MyCE/releases).
 
 
-### `set <cmd> <value>`:
+### `set <cmd> <value>`
 
 > [!CAUTION]
 > **Experimental!**
@@ -213,7 +214,7 @@ Will be stored as:
 key=echo "Hello World"
 ```
 
-### `list [-l] [-a] [PATTERN]`:
+### `list [-l] [-a] [PATTERN]`
 
 Can't remember what you used as the key?
 Just enter `my list` to view the available commands.
@@ -239,7 +240,7 @@ projB.env.backup                projB.env.diff
 ```
 
 
-### `definition <cmd>`:
+### `definition <cmd>`
 
 It can be easy to forget which `.myCommands` file you added a definition especially if you're attempting to edit it.
 To help locate which file(s) a certain command is defined, you can use the `definition` action to show it's references.
@@ -254,7 +255,7 @@ The output will contain the full file path, line number, command reference (sect
 ```
 
 
-### `update [diff] [latest|released|head|main|<TAG>]`:
+### `update [diff] [latest|released|head|main|<TAG>]`
 
 Easily pull down updates from the github repo.
 The file will automatically update the MyCE script (typically `/usr/local/bin`) and the permissions set to 755.
@@ -262,11 +263,9 @@ This command needs to be run with root level privileges.
 If not, it will attempt to elevate itself and prompt for a password if needed.
 
 If you only want to view the changes (uses `sdiff`) between your local version and the latest version on GitHub, you can use `my update diff`.
+
 You can also reference a version tag with the diff command.
 If not specified, the latest released version will be assumed.
-
-By default, the latest released version will be installed.
-You can explicitly reference this with either `my
 If you want to grab the latest version from the `main` branch, specify either `head` or `main`.
 
 You may roll-back to a previously release version by specifying the tag.
@@ -287,7 +286,8 @@ my update v26.2.13
 > [!IMPORTANT]
 > Options for the `my` script should be added immediately following the `my` script call (before the key).
 
-### `-v | -vv | -vvv`:
+### `-v | -vv | -vvv`
+
 Log prints can be enabled for debugging by including the `-v` option.
 Crank up the level by stacking more (`-vv`, `-vvv`).
 Three levels is currently the most verbosity used in log prints, but if you get a little trigger happy with the `v` key, it will be ok :smiley:.
@@ -298,7 +298,8 @@ my -vv build
 my -vvv build
 ```
 
-### `-d`:
+### `-d`
+
 Curious how your `.myCommands` entries will expand, but not brave enough to just try?
 A dry run can be enabled by using the `-d` option.
 
@@ -312,7 +313,8 @@ A dry run can be enabled by using the `-d` option.
 CMD: podman exec -it my-container bash 
 ```
 
-### `-c`:
+### `-c`
+
 Include this option if you don't want your shell rc file to expand for this execution.
 To always disable sourcing the shell rc file, see [MYCE_RUNCOM](#myce_runcom).
 
@@ -321,9 +323,11 @@ my -c build
 ```
 
 ### `?`
-A shorthand to preview the command that will be expanded, but not actually run the command is available by adding a trailing ` ?` on the command.
+
+A shorthand to preview the command that will be expanded, but not actually run the command is available by adding a trailing `?` on the command.
 When a command that ends with `?` is detected, MyCE will interpret this as a request to print the final command to be executed (and will remove the '?' char).
 This shorthand syntax makes it easy to question the command that will be executed, then if it is the command you want, you can:
+
 1. Press UP-ARROW to recall the previous command from history
 1. Press BACKSPACE to remove the '?' char
 1. Press ENTER to execute the command
