@@ -142,6 +142,10 @@ test_cases = {
     # Dry Run Special Syntax
     "-d time": "THIS IS A DRYRUN.*CMD: ",
     "time ?": "THIS IS A DRYRUN.*CMD: ",
+
+    # Bug 1: Positional arguments at start of command
+    "bug.one.echo_first echo": "^hello$",
+    "bug.one.echo_with_prefix world": "^prefix: world$",
 }
 
 

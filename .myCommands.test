@@ -96,3 +96,7 @@ sub=echo "Testing Nested Subst" && ${echo_bin} -e "\033[31m$1!\033[0m" "Other ${
 
 [dir]
 path=echo __DIRECTORY__
+
+[bug.one]
+echo_first=$1 hello
+echo_with_prefix=echo prefix: $1
