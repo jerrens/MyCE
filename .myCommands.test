@@ -97,6 +97,14 @@ sub=echo "Testing Nested Subst" && ${echo_bin} -e "\033[31m$1!\033[0m" "Other ${
 [dir]
 path=echo __DIRECTORY__
 
-[bug.one]
+[positional.start]
+# Test argument substitution at start and end of commands
 echo_first=$1 hello
 echo_with_prefix=echo prefix: $1
+
+
+[variable.replacement]
+# Test variable replacement at start and mid-command
+MYVALUE=echo
+test_var_sub=echo result_${variable.replacement.MYVALUE}_end
+test_var_start=${variable.replacement.MYVALUE} is here

@@ -143,11 +143,17 @@ test_cases = {
     "-d time": "THIS IS A DRYRUN.*CMD: ",
     "time ?": "THIS IS A DRYRUN.*CMD: ",
 
-    # Bug 1: Positional arguments at start of command
-    "bug.one.echo_first echo": "^hello$",
-    "bug.one.echo_with_prefix world": "^prefix: world$",
+    # Positional arguments at start of command
+    "positional.start.echo_first echo": "^hello$",
+    "positional.start.echo_with_prefix world": "^prefix: world$",
+
+    # Variable replacement at start and mid-command
+    "variable.replacement.test_var_sub": "^result_echo_end$",
+    "variable.replacement.test_var_start": "^is here$",
 }
 
+
+# Keys of tests that should be run.  If empty, all tests will be run
 
 # Keys of tests that should be run.  If empty, all tests will be run
 focus_run_test = [  

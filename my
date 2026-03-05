@@ -882,55 +882,53 @@ function find_and_run_cmd() {
         local loopCount=0
         # Look for variable references in the command
         #  - Matches ${VAR_NAME}, ${VAR_NAME:-default}, or $VAR_NAME patterns
-        #  - Excludes those startign with an escaped dollar signs (\$)
-        # while [[ "$binary_cmd" =~ (^|[^\\])(\$\{([a-zA-Z_][^}]*)\}|\$([a-zA-Z_][a-zA-Z_0-9]*)) ]]; do
-        while [[ "$binary_cmd" =~ (^|[^\\])(\$([a-zA-Z_]+|\{([a-zA-Z][^:}]+)(:[^}]+)?\}?)) ]]; do
-            log 3 "Variable Reference Match Results - [1]='${BASH_REMATCH[1]}'; [2]='${BASH_REMATCH[2]}'; [3]='${BASH_REMATCH[3]}'; [4]='${BASH_REMATCH[4]}'"
+        #  - Excludes those starting with an escaped dollar sign (\$)
+        # This regex ensures we match variables at the start of the string as well
+        while :; do
+            # Only match unescaped $ (not preceded by a backslash)
+            if [[ "$binary_cmd" =~ (^|[^\\])(\$([a-zA-Z_]+|\{([a-zA-Z][^:}]+)(:[^}]+)?\}?)) ]]; then
+                prefix="${BASH_REMATCH[1]}"
+                slug="${BASH_REMATCH[2]}"
 
-            slug="${BASH_REMATCH[2]}"
-
-            if [[ -n ${BASH_REMATCH[4]} ]]; then
+                if [[ -n ${BASH_REMATCH[4]} ]]; then
                 # If the variable is surrounded by {}, it starts with [a-zA-Z_] and includes any character except for }
-                var_name=${BASH_REMATCH[4]}
-                log 3 "      Found variable inside curly brackets: ${var_name}"
+                    var_name=${BASH_REMATCH[4]}
+                    log 3 "      Found variable inside curly brackets: ${var_name}"
 
+                else
+                    # If the variable is not surrounded by {}, it follows the more restrictive pattern
+                    var_name=${BASH_REMATCH[3]}
+                    log 3 "      Found variable: ${var_name}"
+                fi
+                
+                # Get the value of the variable from the loaded commands
+                log 3 "Variable Reference Match Results - prefix='${prefix}'; slug='${slug}'; var_name='${var_name}'"
+                log 2 "    Trying to replace '$slug' with variable: $var_name"
+                before="$binary_cmd"
+                if findKey "$var_name"; then
+                    log 2 "    Found key: $foundKey_value"
+                    # Replace only the first occurrence after the prefix
+                    binary_cmd="${binary_cmd/"$prefix$slug"/"$prefix$foundKey_value"}"
+                else
+                    log 1 "The referenced variable ($slug) was not defined! Passing through to eval"
+                    # Replace only the first occurrence after the prefix with escaped $
+                    binary_cmd="${binary_cmd/"$prefix$slug"/"${prefix}\\$slug"}"
+                fi
+                log 2 "    New:  $binary_cmd"
+
+                # Avoid an infinite loop
+                ((loopCount++))
+                if ((loopCount >= max_loops)); then
+                    log 0 "There appears to be an infinite loop in your command references!"
+                    exit 1
+                fi
+                
+                # If no progress, break
+                if [[ "$binary_cmd" == "$before" ]]; then
+                    break
+                fi
             else
-                # If the variable is not surrounded by {}, it follows the more restrictive pattern
-                var_name=${BASH_REMATCH[3]}
-                log 3 "      Found variable: ${var_name}"
-            fi
-
-            # Get the value of the variable from the loaded commands
-            log 2 "    Trying to replace '$slug' with variable: $var_name"
-            if findKey "$var_name"; then
-                log 2 "    Found key: $foundKey_value"
-                # Substitute the variable in the binary_cmd
-                binary_cmd=${binary_cmd/$slug/$foundKey_value}
-            else
-                log 1 "The referenced variable ($slug) was not defined! Passing through to eval"
-                # Escape it to pass on to eval later
-
-                # Protect any existing escaped instances of this variable \$PATTERN with a temporary placeholder
-                local temp_placeholder="__TEMP_ESCAPED_$((RANDOM))__"
-                binary_cmd="${binary_cmd//\\$slug/$temp_placeholder}"
-                log 3 "    Ignore Escaped:   $binary_cmd"
-
-                # Now replace only the unescaped instances
-                binary_cmd=${binary_cmd/$slug/\\$slug}
-                log 3 "    Update Refs:       $binary_cmd"
-
-                # Restore the escaped version
-                binary_cmd="${binary_cmd//$temp_placeholder/\\$slug}"
-                log 3 "    Restore Previous:  $binary_cmd"
-            fi
-
-            log 2 "    New:  $binary_cmd"
-
-            # Avoid an infinite loop
-            ((loopCount++))
-            if ((loopCount >= max_loops)); then
-                log 0 "There appears to be an infinite loop in your command references!"
-                exit 1
+                break
             fi
         done
 

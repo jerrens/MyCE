@@ -4,6 +4,9 @@
 ## 26.3.5
 
 * BugFix: Positional Argument Substitution at the beginning of a command may fail
+* BugFix: Variable substitution at the beginning of a command may fail
+* Optimized while look to break when no progress was made on variable substitutions
+
 
 ## 26.2.25
 
