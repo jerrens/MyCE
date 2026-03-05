@@ -1,6 +1,10 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.3.5
+
+* BugFix: Positional Argument Substitution at the beginning of a command may fail
+
 ## 26.2.25
 
 * Added special dry-run syntax - add ' ?' at the end of a command to print the command that would be executed
