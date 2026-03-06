@@ -1,6 +1,12 @@
 #!/bin/bash
 # spell-checker:words dzdo sdiff MyCE mkfifo
 
+# Save original IFS at script start
+__MYCE_ORIGINAL_IFS="$IFS"
+
+# Trap to restore IFS on exit, error, or interrupt
+trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
+
 __Author="Jerren Saunders"
 __Version=26.3.5
 __ScriptName=$(basename "$0") # File name with extension

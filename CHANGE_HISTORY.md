@@ -6,7 +6,7 @@
 * BugFix: Positional Argument Substitution at the beginning of a command may fail
 * BugFix: Variable substitution at the beginning of a command may fail
 * Optimized while look to break when no progress was made on variable substitutions
-
+* Shell state protection: The original IFS is now saved at script start and restored on exit (including interrupts/errors) to prevent accidental shell state corruption.
 
 ## 26.2.25
 
