@@ -1,0 +1,4 @@
+# .myCommands for projectC
+[alias]
+hello=echo "Hello from projectC"
+shared=echo "Shared from projectC"

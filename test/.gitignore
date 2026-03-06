@@ -1,0 +1,2 @@
+# Allow .myCommands files in this directory and all subdirectories
+!**/.myCommands

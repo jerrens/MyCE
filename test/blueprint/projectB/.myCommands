@@ -1,0 +1,6 @@
+# .myCommands for projectB
+[alias]
+hello=echo "Hello from projectB"
+shared=echo "Shared from projectB"
+
+merge=echo projectB-override-value

@@ -150,6 +150,64 @@ test_cases = {
     # Variable replacement at start and mid-command
     "variable.replacement.test_var_sub": "^result_echo_end$",
     "variable.replacement.test_var_start": "^is here$",
+    
+    # --- Directory merge/override tests ---
+    "PWD Merge: projectA hello": {
+        "cmd": "alias.hello",
+        "see": "Hello from projectA",
+        "pwd": "projectA",
+        "description": "Should use projectA's hello alias"
+    },
+    "PWD Merge: projectB hello": {
+        "cmd": "alias.hello",
+        "see": "Hello from projectB",
+        "pwd": "projectB",
+        "description": "Should use projectB's hello alias"
+    },
+    "PWD Merge: projectC hello": {
+        "cmd": "alias.hello",
+        "see": "Hello from projectC",
+        "pwd": "projectC",
+        "description": "Should use projectC's hello alias"
+    },
+    "PWD Merge: projectA shared": {
+        "cmd": "alias.shared",
+        "see": "Shared from projectA",
+        "pwd": "projectA",
+        "description": "Should use projectA's shared alias"
+    },
+    "PWD Merge: projectB shared": {
+        "cmd": "alias.shared",
+        "see": "Shared from projectB",
+        "pwd": "projectB",
+        "description": "Should use projectB's shared alias"
+    },
+    "PWD Merge: projectC shared": {
+        "cmd": "alias.shared",
+        "see": "Shared from projectC",
+        "pwd": "projectC",
+        "description": "Should use projectC's shared alias"
+    },
+
+    # --- alias.merge value merge/override tests ---
+    "PWD Merge: projectA alias.merge": {
+        "cmd": "alias.merge",
+        "see": "blueprint-default-value",
+        "pwd": "projectA",
+        "description": "Should use default alias.merge in projectA"
+    },
+    "PWD Merge: projectB alias.merge": {
+        "cmd": "alias.merge",
+        "see": "projectB-override-value",
+        "pwd": "projectB",
+        "description": "Should use overridden alias.merge in projectB"
+    },
+    "PWD Merge: projectC alias.merge": {
+        "cmd": "alias.merge",
+        "see": "blueprint-default-value",
+        "pwd": "projectC",
+        "description": "Should use default alias.merge in projectC"
+    },
 }
 
 
@@ -181,6 +239,7 @@ if len(focus_run_test) > 0:
 
 def run_tests():
     failed = 0
+    orig_cwd = os.getcwd()
     for command, val in test_cases.items():
         try:
             if isinstance(val, dict):
@@ -189,17 +248,22 @@ def run_tests():
                 env_list = val.get("env", None)
                 expected_output = val.get("see", "Missing 'see' property in test")
                 description = val.get("description", "")
+                pwd = val.get("pwd", orig_cwd)
             else:
                 cmd_prefix = ""
-                cmd_suffix=command
+                cmd_suffix = command
                 env_list = None
                 expected_output = val
                 description = ""
+                pwd = orig_cwd
 
             # Handle section headers
             if command.startswith('#'):
                 print(f"\n{expected_output}\n" + "-" * 30)
                 continue
+
+            test_cwd = os.path.join(orig_cwd, pwd) if not os.path.isabs(pwd) else pwd
+            os.chdir(test_cwd)
 
             test_cmd = f"{cmd_prefix} {exe} {cmd_suffix}"
 
@@ -216,7 +280,7 @@ def run_tests():
             )
             actual_output = result.stdout.strip() + result.stderr.strip()
 
-            expected_pattern = re.compile(expected_output, re.DOTALL  )
+            expected_pattern = re.compile(expected_output, re.DOTALL)
 
             if expected_pattern.search(actual_output):
                 print(f"✓ {command:<60} {description}")
@@ -231,7 +295,8 @@ def run_tests():
         except Exception as e:
             print(f"✗ {command} - Error: {e}")
             failed += 1
-
+        finally:
+            os.chdir(orig_cwd)
     return failed
 
 if __name__ == "__main__":
