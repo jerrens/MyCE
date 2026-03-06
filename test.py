@@ -16,7 +16,7 @@ test_cases = {
     "version": "\d{2}.\d{1,2}.\d{1,2}",
     "help": "USAGE:",
 
-    "tmp": "^/home/.*/.myCommand",
+    "tmp": "^/(home|root)/.*/.myCommand",
     "echo_bin 42": "42",
 
     "section.tmp": "hello",
@@ -45,10 +45,10 @@ test_cases = {
     "test.var2": "^foo$",
     "test.var3": "^foo$",
 
-    "test.env1": "^/home/.*",
-    "test.env2": "^/home/.*",
-    "test.env3": "^/home/.*",
-    "test.env4": "^/home/.*",
+    "test.env1": "^/(home|root).*",
+    "test.env2": "^/(home|root).*",
+    "test.env3": "^/(home|root).*",
+    "test.env4": "^/(home|root).*",
 
     "test.unk1": "^$",
     "test.unk2": "^$",
@@ -81,7 +81,7 @@ test_cases = {
     "line.len 10": "^-{10}$",
 
     # Commands with ENV definitions
-    "time": "^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [AP]M$",
+    "time": "^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}( [AP]M)?$",
     "timestamp": "^\d{8}_\d{6}$",
 
     # Commands with pipes

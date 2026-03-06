@@ -576,6 +576,22 @@ After adding one of those lines to `~/.bashrc`, save, then run `exec bash` and t
 If you'd like to learn more about MyCE, an article can be found at <https://medium.com/@jerren/introduction-my-command-engine-myce-42e15028364a> that goes into details and provides some examples.
 
 
+## Shell Compatibility and Alias Expansion
+
+Testing has been performed in bash and zsh.
+MyCE may work in other shells, but some functionality may not work as expected.
+If you're using a different shell and something is not working as expected, please report these issues.
+
+**Note on Aliases:**
+
+If you define aliases in your shell rc file (e.g., `~/.bashrc`, `~/.zshrc`), these are only available in interactive shells by default. In scripts, alias expansion is disabled unless explicitly enabled:
+
+- In Bash, MyCE will attempt to enable alias expansion when sourcing your rc file (using `shopt -s expand_aliases` if available).
+- For maximum portability, consider using shell functions instead of aliases for customizations you want available to MyCE.
+
+**Summary:** Alias expansion in scripts is only supported in Bash. In other shells, aliases are not expanded in scripts.
+
+
 ## Troubleshooting
 
 If you find a bug or have a suggestion on a feature to add to MyCE, please open a GitHub Issue, or better yet submit a PR for consideration.

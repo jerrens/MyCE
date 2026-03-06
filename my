@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.3.5
+__Version=26.3.6
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -163,10 +163,13 @@ function runCMD() {
     log 3 "Executing: ${full_cmd[*]}"
 
     # Before executing the command, run the shell rc file to support aliases and other configurations
-    if [[ "${MYCE_RUNCOM}" != "false" ]] && [ -f "${MYCE_RUNCOM}" ]; then
+    if [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ]; then
         log 1 "MYCE_RUNCOM: Sourcing shell's run commands file - '${MYCE_RUNCOM}'..."
-        source "${MYCE_RUNCOM}" &> /dev/null
-        shopt -s expand_aliases
+        . "${MYCE_RUNCOM}" 2>/dev/null
+        # Enable alias expansion if running under Bash and shopt is available
+        if [ -n "$BASH_VERSION" ] && command -v shopt >/dev/null 2>&1; then
+            shopt -s expand_aliases
+        fi
     else
         log 1 "MYCE_RUNCOM file not found or set to 'false'"
         log 2 "MYCE_RUNCOM = ${MYCE_RUNCOM}"
@@ -530,9 +533,20 @@ function load_my_custom_files() {
         file_paths+=("${HOME}/${MY_CUSTOM_FILE%?}")
     fi
 
-    # Remove duplicate entries (if executed in a subdirectory of ~)
+    # Remove consecutive duplicate entries (if executed in a subdirectory of ~)
     # If this re-orders the list, then consider using https://stackoverflow.com/a/54797762/2136313 method
-    file_paths=($(printf "%s\n" "${file_paths[@]}" | uniq))
+    # Remove only consecutive duplicate entries (preserve order, allow non-consecutive duplicates)
+    unique_file_paths=()
+    prev=""
+    for fp in "${file_paths[@]}"; do
+        if [[ "$fp" != "$prev" ]]; then
+            unique_file_paths+=("$fp")
+        fi
+        prev="$fp"
+    done
+    file_paths=("${unique_file_paths[@]}")
+    unset unique_file_paths
+    unset prev
 
     # Process the files in reverse order
     for (( idx=${#file_paths[@]}-1 ; idx>=0 ; idx-- )) ; do
@@ -607,7 +621,8 @@ function set_key_value() {
 # NOTE: Only keys beginning with a lower-case letter will be printed unless `-a` option is specified
 #  Keys starting with uppercase are considered variables
 function list_keys() {
-    local -r indent="    "
+    local indent="    "
+    readonly indent
     local use_column=true
     local include_const=false
     local filter_pattern=""
@@ -645,7 +660,8 @@ function list_keys() {
             grepCMD='grep "\\.\?[^A-Z_-]\+$"'
         fi
 
-        local words=$(printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort)
+        local words
+        words=$(printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort)
 
         # Apply a filter if a partial word was given (for autocomplete)
         if [[ -n "$filter_pattern" ]]; then
@@ -750,7 +766,7 @@ function print_key_entries_in_file() {
     fi
 
     # After collecting all lines, print the contents as a table using column
-    if [[ -z ${foundFileDefs[@]} ]]; then
+    if ! (declare -p foundFileDefs 2>/dev/null | grep -q 'declare \-a') || [ ${#foundFileDefs[@]} -eq 0 ]; then
         # Nothing found in this file
         log 1 "  Nothing found\n"
     else
@@ -793,7 +809,18 @@ function get_key_definition() {
 
         # This may cause a duplicate entry (if executed in a subdirectory of ~)
         # If this re-orders the list, then consider using https://stackoverflow.com/a/54797762/2136313 method
-        file_paths=($(printf "%s\n" "${file_paths[@]}" | uniq))
+        # Remove only consecutive duplicate entries (preserve order, allow non-consecutive duplicates)
+        unique_file_paths=()
+        prev=""
+        for fp in "${file_paths[@]}"; do
+            if [[ "$fp" != "$prev" ]]; then
+                unique_file_paths+=("$fp")
+            fi
+            prev="$fp"
+        done
+        file_paths=("${unique_file_paths[@]}")
+        unset unique_file_paths
+        unset prev
     fi
 
     # Process the files in reverse order
@@ -813,7 +840,7 @@ function get_key_definition() {
     fi
 
     # After collecting all lines, print the contents as a table using column
-    if [[ -z ${foundDefs[@]} ]]; then
+    if ! (declare -p foundDefs 2>/dev/null | grep -q 'declare \-a') || [ ${#foundDefs[@]} -eq 0 ]; then
         log 1 "  Not found\n"
     else
         log 1 "Definitions Found:\n$(printf '%*s' 100 | tr ' ' '-')"

@@ -1,6 +1,10 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.3.6
+
+* Work towards zsh compatibility
+
 ## 26.3.5
 
 * BugFix: Positional Argument Substitution at the beginning of a command may fail
