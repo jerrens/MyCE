@@ -8,10 +8,10 @@ import shutil
 import subprocess
 import sys
 
-exe="./my"
-
+exe = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "my"))
 
 # Array of command -> expected output pairs
+# Use {{TEST_DIR}} in test values for temp directory substitution
 test_cases = {
     "version": "\d{2}.\d{1,2}.\d{1,2}",
     "help": "USAGE:",
@@ -89,7 +89,7 @@ test_cases = {
 
     # System Commands
     "echo 'Hello World'": "Hello World",
-    
+
     '#STDERR': "STDERR Filtering",
     "unknown cmd": "^Unknown key or command",
     "ls /bad": "ls: cannot access '/bad': No such file or directory",
@@ -119,7 +119,7 @@ test_cases = {
         "cmd": "list -l",
         "see": "(?!.*CONST)", # Should not show 'CONST' variable
     },
-    
+
     "Should not show all-cap section variables": {
         "cmd": "list -l",
         "see": "section.SHOULD_(?!.*BE_HIDDEN)", # Should not show 'SHOULD_BE_HIDDEN' variable
@@ -129,15 +129,15 @@ test_cases = {
         "cmd": "list -l -a",
         "see": "CONST",
     },
-    
+
     "Should show all-cap section variables with -a": {
         "cmd": "list -l -a",
         "see": "section.SHOULD_BE_HIDDEN",
     },
 
     # Special Variables
-    "dir.path": os.path.dirname(os.path.abspath(__file__)),
-    "-d THIS_DIR": "CMD: " + os.path.dirname(os.path.abspath(__file__)),
+    "dir.path": "{{TEST_DIR}}",
+    "-d THIS_DIR": "CMD: {{TEST_DIR}}",
 
     # Dry Run Special Syntax
     "-d time": "THIS IS A DRYRUN.*CMD: ",
@@ -156,13 +156,26 @@ test_cases = {
 # Keys of tests that should be run.  If empty, all tests will be run
 
 # Keys of tests that should be run.  If empty, all tests will be run
-focus_run_test = [  
-    # Enter test key here to only run specific tests.  
+focus_run_test = [
+    # Enter test key here to only run specific tests.
     # This is useful during development to focus on a specific test or subset of tests without running the entire suite.
-    
+
 ]
 
-if len( focus_run_test) > 0:
+
+
+# Substitute {{TEST_DIR}} in test values with the actual temp directory
+def substitute_testdir_in_testcases(test_cases, testdir):
+    def subst(val):
+        if isinstance(val, dict):
+            return {k: subst(v) for k, v in val.items()}
+        elif isinstance(val, str):
+            return val.replace("{{TEST_DIR}}", testdir)
+        else:
+            return val
+    return {k: subst(v) for k, v in test_cases.items()}
+
+if len(focus_run_test) > 0:
     test_cases = {key: test_cases[key] for key in focus_run_test}
 
 
@@ -187,9 +200,9 @@ def run_tests():
             if command.startswith('#'):
                 print(f"\n{expected_output}\n" + "-" * 30)
                 continue
-           
+
             test_cmd = f"{cmd_prefix} {exe} {cmd_suffix}"
-            
+
             if "-d" in sys.argv or "--debug" in sys.argv:
                 print(f">> Executing: {test_cmd}\n\t", end="")
 
@@ -222,15 +235,36 @@ def run_tests():
     return failed
 
 if __name__ == "__main__":
-    # Backup .myCommands before running tests
-    my_command_backup = ".myCommands.bak-" + str(datetime.now().timestamp())
-    print(f"Creating backup of .myCommands at {my_command_backup}")
-    if os.path.exists(".myCommands"):
-        shutil.move(".myCommands", my_command_backup)
+    import tempfile
 
-    # Move .myCommands.test to .myCommands for testing
-    print("Setting up .myCommands for testing")
-    shutil.copy(".myCommands.test", ".myCommands")
+    # Create a temp test directory in /tmp
+    test_dir = os.path.join(tempfile.gettempdir(), f"myce_test_{os.getpid()}")
+    os.makedirs(test_dir, exist_ok=True)
+    print(f"Created test directory: {test_dir}")
+
+
+    # Copy all contents of ./test/blueprint (including subfolders/files) to the temp test directory
+    import pathlib
+    blueprint_dir = os.path.join(os.path.dirname(__file__), "blueprint")
+    if os.path.exists(blueprint_dir):
+        for root, dirs, files in os.walk(blueprint_dir):
+            rel_root = os.path.relpath(root, blueprint_dir)
+            dest_root = os.path.join(test_dir, rel_root) if rel_root != "." else test_dir
+            os.makedirs(dest_root, exist_ok=True)
+            for file in files:
+                src_file = os.path.join(root, file)
+                dst_file = os.path.join(dest_root, file)
+                shutil.copy2(src_file, dst_file)
+    else:
+        print(f"Warning: blueprint directory '{blueprint_dir}' does not exist.")
+
+
+    # Substitute {{TEST_DIR}} in test values
+    test_cases = substitute_testdir_in_testcases(test_cases, test_dir)
+
+    # Set CWD to the test directory for the duration of the test
+    orig_cwd = os.getcwd()
+    os.chdir(test_dir)
     print("Starting tests...\n")
 
     # Run the tests
@@ -240,8 +274,12 @@ if __name__ == "__main__":
         print(f"Error running tests: {e}")
         failed = 1
 
-    # Restore original .myCommands after tests
-    print("\nRestoring original .myCommands")
-    shutil.move(my_command_backup, ".myCommands")
+    # Cleanup: remove the test directory and restore CWD
+    os.chdir(orig_cwd)
+    try:
+        shutil.rmtree(test_dir)
+        print(f"Cleaned up test directory: {test_dir}")
+    except Exception as e:
+        print(f"Warning: Failed to clean up test directory: {e}")
 
     sys.exit(failed)
