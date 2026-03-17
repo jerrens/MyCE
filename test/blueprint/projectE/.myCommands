@@ -1,0 +1,15 @@
+# INI File Processing Test Configuration for projectE
+# Tests: variable substitution with undefined variables and recursive references
+
+# Section for undefined variable tests
+[ini.var]
+# Test with undefined variable - should be escaped or result in empty/warning
+undefined=echo "${undefined_var}"
+
+# Test with recursive variable reference (should detect/handle infinite loop)
+# This creates a potential circular reference: recursive references itself
+recursive=echo "Value: ${ini.var.recursive}"
+
+# For comparison, test a properly defined variable that is referenced
+defined_ref=defined_value
+use_defined=echo "${ini.var.defined_ref}"

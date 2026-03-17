@@ -50,18 +50,32 @@ test_cases = {
     },
 
     # Test variable substitution with undefined variables (should escape or warn)
-    "ini.var.undefined": {
+    "ini.var.undefined (with ENV)": {
+        "cmd": "ini.var.undefined",
+        "env": {"undefined_var": "hello"},
+        "pwd": "projectE",
+        "see": "hello",  # Should resolve to env var
+        "description": "Test variable substitution with undefined variables"
+    },
+
+    "ini.var.undefined (without ENV)": {
         "cmd": "ini.var.undefined",
         "pwd": "projectE",
-        "see": "^\\$\\{undefined_var\\}|^$",  # Should be escaped or empty
-        "description": "Test variable substitution with undefined variables"
+        "see": "^$",  # Should be empty
+        "description": "Test that undefined variable in value is treated as empty or literal reference"
+    },
+
+    "-d ini.var.undefined": {
+        "pwd": "projectE",
+        "see": "CMD: echo \"\$\{undefined_var\}\"",  # Should show the literal command with the variable unexpanded
+        "description": "Test that undefined variable in command is treated as literal and not expanded"
     },
 
     # Test variable substitution with recursive references (should detect infinite loop)
     "ini.var.recursive": {
         "cmd": "ini.var.recursive",
         "pwd": "projectE",
-        "see": ".*",  # Should handle gracefully without infinite loop
+        "see": "There appears to be an infinite loop in your command references!",
         "description": "Test variable substitution with recursive references"
     },
 
@@ -75,5 +89,12 @@ test_cases = {
     "ini.var.escaped": {
         "pwd": "projectD",
         "see": "^\\$notavar$",
+    },
+
+    # Test variable substitution with defined variables
+    "ini.var.use_defined": {
+        "pwd": "projectE",
+        "see": "defined_value",
+        "description": "Test variable substitution with defined variables"
     },
 }
