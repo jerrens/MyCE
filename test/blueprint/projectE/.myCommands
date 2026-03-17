@@ -13,3 +13,15 @@ recursive=echo "Value: ${ini.var.recursive}"
 # For comparison, test a properly defined variable that is referenced
 defined_ref=defined_value
 use_defined=echo "${ini.var.defined_ref}"
+
+
+# .myCommands for Test cases for command execution with additional arguments
+
+[extra]
+noargs=echo "Execute noargs"
+single=echo "Hello $1"
+multi=echo "Multiple args: $@"
+quote=echo "Quoted $@"
+withvar=echo "Name: $1 Age: 25"
+pos1=echo "First: $1 Second: $2 Third: $3"
+default=echo "With defaults"
