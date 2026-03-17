@@ -138,6 +138,13 @@ test_cases = {
     # Special Variables
     "dir.path": "{{TEST_DIR}}",
     "-d THIS_DIR": "CMD: {{TEST_DIR}}",
+    
+    "Directory Special Variable (projectA)": {
+        "cmd": "dir.path",
+        "see": "{{TEST_DIR}}",
+        "pwd": "projectA",        
+        "description": "Should use the __DIRECTORY__ variable to show the test directory"
+    },
 
     # Dry Run Special Syntax
     "-d time": "THIS IS A DRYRUN.*CMD: ",
