@@ -5,6 +5,10 @@
 
 * Fixed error message when invalid syntax usd for set command
 * Refactored test.py to load test cases from different files for easier test management
+* Exit when unknown option given
+* Return error when no key given with `definition` action
+* Added several test cases
+
 
 ## 26.3.6
 

@@ -784,6 +784,14 @@ function get_key_definition() {
     local defKey=$1
     shift
 
+    # Check if defKey is empty
+    if [[ -z "$defKey" ]]; then
+        log 0 "Missing key argument!"
+        log 0 "  Usage: ${__ScriptName} definition <key>"
+        log 0 "  For full details, see '${__ScriptName} help'"
+        return 1
+    fi
+
     # NOTE: Uses the same logic to traverse the directory tree for command files,
     #   but looks for any occurrence of the key instead of the typical LIFO processing
 
