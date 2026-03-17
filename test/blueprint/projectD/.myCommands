@@ -1,0 +1,24 @@
+# INI File Processing Test Configuration for projectD
+# Tests: include directives, section/key parsing with whitespace, heredoc parsing
+
+# Section for whitespace tests
+[ini.whitespace]
+# Testing various whitespace scenarios around the equals sign
+key1=echo value1
+key2  =  echo value2
+key3	=	echo value3
+spaced_key   =   echo spaced_value
+
+# Section for heredoc tests
+[ini.heredoc]
+standard=echo "This is a standard heredoc \
+with multiple lines \
+but parsed as a single line due to backslashes"
+
+quoted=echo "Heredoc with 'single' and \"double\" quotes preserved"
+
+# Section for simple variable tests
+[ini.var]
+defined=echo "defined_value"
+simple=echo "$1"
+escaped=echo "\\$notavar"

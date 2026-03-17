@@ -1,0 +1,9 @@
+# INI File Processing Test Configuration for projectD
+# Tests: include directives, section/key parsing with whitespace, heredoc parsing
+
+# Test include directive with a missing file (should warn but not fail)
+include ./nonexistent_file.conf
+include.missing=echo "include directive test passed"
+
+[test]
+key=echo value
