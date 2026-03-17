@@ -1,6 +1,11 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.3.16
+
+* Fixed error message when invalid syntax usd for set command
+* Refactored test.py to load test cases from different files for easier test management
+
 ## 26.3.6
 
 * Work towards zsh compatibility

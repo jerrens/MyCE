@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.3.6
+__Version=26.3.16
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -1164,7 +1164,8 @@ function main() {
         set)
             shift # Remove the 'set' command
             if [[ -z "$1" || -z "$2" ]]; then
-                log 1 "Usage: ${__ScriptName} add <key> <value>"
+                log 0 "Missing key or value!"
+                log 0 "  Usage: ${__ScriptName} set <key> <value>"
                 exit 1
             fi
             set_key_value "$1" "${@:2}"
