@@ -127,7 +127,7 @@ while getopts 'dvc' option; do
             log 0 "---- THIS IS A DRYRUN! ----\n"
             ;;
         v ) VERBOSE=$((VERBOSE + 1)) ;;
-        * ) # Do Nothing
+        * ) exit 1 ;;
     esac
 done
 shift $((OPTIND -1)) # Remaining args will be left

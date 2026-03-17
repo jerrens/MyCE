@@ -27,14 +27,30 @@ focus_run_test = [
 
 
 # Dynamically load all test_cases dicts from files in test_cases directory
-def load_all_test_cases(test_cases_dir):
+def load_all_test_cases(test_cases_dir, only_files=None):
+    """
+    Load test cases from files in test_cases_dir.
+    
+    Args:
+        test_cases_dir: Path to the test_cases directory
+        only_files: List of file patterns (without .py extension) to include.
+                   If None, all .py files are loaded.
+                   Example: ['basic', 'option_parsing'] or ['option_parsing']
+    """
     all_cases = {}
 
     # Load and merge test_cases from all files in test/test_cases directory
     if os.path.isdir(test_cases_dir):
-        # py_files = sorted(glob.glob(os.path.join(test_cases_dir, '*.py')))
         py_files = glob.glob(os.path.join(test_cases_dir, '*.py'))
+        
         for file in py_files:
+            # Extract base filename without .py extension
+            base_name = os.path.splitext(os.path.basename(file))[0]
+            
+            # If only_files is specified, skip files not in the list
+            if only_files is not None and base_name not in only_files:
+                continue
+            
             local_ns = {}
             with open(file, 'r') as f:
                 code = f.read()
@@ -127,8 +143,53 @@ def run_tests():
     return failed
 
 if __name__ == "__main__":
+    # Display help message
+    if "--help" in sys.argv or "-h" in sys.argv:
+        help_text = """
+Usage: python test.py [OPTIONS]
+
+Test runner for MyCE script. Executes test cases loaded from test_cases/*.py files.
+
+OPTIONS:
+  --help, -h                    Show this help message and exit
+  --test-file FILE1,FILE2,...   Load only specific test case files (comma-separated)
+                                File names without .py extension
+  --debug, -d                   Print debug information during test execution
+
+EXAMPLES:
+  # Run all test cases
+  python test.py
+
+  # Run only basic test cases
+  python test.py --test-file basic
+
+  # Run only option_parsing test cases  
+  python test.py --test-file option_parsing
+
+  # Run multiple specific test files
+  python test.py --test-file basic,option_parsing
+
+  # Run with debug output
+  python test.py --debug
+
+  # Run specific tests with debug
+  python test.py --test-file option_parsing --debug
+"""
+        print(help_text)
+        sys.exit(0)
+    
+    # Parse --test-file flag to only load specific test case files
+    only_test_files = None
+    if "--test-file" in sys.argv:
+        idx = sys.argv.index("--test-file")
+        if idx + 1 < len(sys.argv):
+            # Split comma-separated file names and remove .py extension if present
+            files_arg = sys.argv[idx + 1]
+            only_test_files = [f.replace('.py', '') for f in files_arg.split(',')]
+            print(f"Loading only test cases from: {', '.join(only_test_files)}")
+    
     test_cases_dir = os.path.join(os.path.dirname(__file__), 'test_cases')
-    test_cases = load_all_test_cases(test_cases_dir)
+    test_cases = load_all_test_cases(test_cases_dir, only_files=only_test_files)
 
     # Print the number of test cases loaded for verification
     print(f"Number of test cases: {len(test_cases)}")
