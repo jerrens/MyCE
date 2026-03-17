@@ -1,6 +1,10 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.3.17
+
+* Fixed bug for key values that referenced `$@` for substitution
+
 ## 26.3.16
 
 * Fixed error message when invalid syntax usd for set command
@@ -8,7 +12,6 @@
 * Exit when unknown option given
 * Return error when no key given with `definition` action
 * Added several test cases
-
 
 ## 26.3.6
 

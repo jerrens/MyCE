@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.3.16
+__Version=26.3.17
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -909,6 +909,28 @@ function find_and_run_cmd() {
                 log 3 "No positional arg reference found for arg $i"
             fi
         done
+
+        # Handle $@ and $* - all positional arguments
+        # These special variables represent all arguments and should consume all args
+        if [[ "$binary_cmd" =~ (^|[^\\])\$[@*] ]]; then
+            log 2 "Found \$@ or \$* reference - replacing with all args"
+            
+            # Build the args string from the original args array
+            local all_args_str=""
+            for arg in "${args[@]}"; do
+                all_args_str+="$arg "
+            done
+            all_args_str="${all_args_str% }"  # Remove trailing space
+            
+            # Replace both $@ and $* patterns
+            binary_cmd="${binary_cmd//\$@/$all_args_str}"
+            binary_cmd="${binary_cmd//\$\*/$all_args_str}"
+            
+            log 2 "    After \$@ replacement: $binary_cmd"
+            
+            # Mark all args as consumed
+            max_arg_num=${#args[@]}
+        fi
 
         # Shift args to the highest reference found
         # Any remaining args will be left to pass on
