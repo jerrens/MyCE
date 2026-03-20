@@ -10,6 +10,8 @@
 <!-- spell-checker:ignore MyCE sdiff kshrc pushd -->
 # My Command Engine (MyCE)
 
+**Ditch outdated global aliases: hierarchical, context-aware project commands in pure Bash—no dependencies, no global pollution!**
+
 <!-- <div align="center"><img src="./logo/MyCEv2.png" alt="MyCE Logo"></div> -->
 <div align="center"><img src="./logo/MyCEv2.png" alt="MyCE Logo"></div>
 
