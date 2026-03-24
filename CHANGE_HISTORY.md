@@ -1,6 +1,10 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.3.24
+
+* Removed extra print when using trailing '?' (view command mode)
+
 ## 26.3.17
 
 * Fixed bug for key values that referenced `$@` for substitution

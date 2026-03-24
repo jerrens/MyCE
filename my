@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.3.17
+__Version=26.3.24
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -135,10 +135,9 @@ shift $((OPTIND -1)) # Remaining args will be left
 
 # Check for the last arg to be a '?' (special dry run syntax)
 if [[ "${!#}" == "?" ]]; then
-    log 1 "Special Dry Run ending detected - Enabling Dry Run mode"
+    log 1 "Definition View ending detected - Enabling Dry Run mode"
     log 2 "  Arguments Before: ${*}"
     DRYRUN=true
-    log 0 "---- THIS IS A DRYRUN! ----\n"
     # Remove the last argument
     set -- "${@:1:$(($#-1))}"
 
