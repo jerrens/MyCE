@@ -39,7 +39,7 @@ Running `my server.start` will execute docker-compose up.
 - **Recursive Lookup**: If a `.myCommands` file is not found in the current directory, the script searches parent directories until one is found.
 - **Merged Configurations**: Reads `.myCommands` files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
 - **Sectioned Commands**: Uses INI-style sections in `.myCommands` files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
-- **Positional Args**: Values within the `.myCommands` file can use positional argument references (ie $1, $2, ${3})
+- **Positional Args**: Values within the `.myCommands` file can use positional argument references (ie $1, $2, ${3}), or reference all arguments with $@ or $*.
 - **Default Variable Values**: Default values for variables may be set using the following syntax: `${1:-defaultValue}` or `${CONST:-defaultValue}`
 - **Argument Passing**: Additional arguments provided after the command alias are passed directly to the underlying command. This enables dynamic behavior and flexible command usage.
 - **Fallback to Shell**: If the requested alias is not found in the merged `.myCommands` configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
@@ -64,6 +64,10 @@ Keys that are fully uppercase are:
 
 If you wish to view the evaluated value of a constant, you can use the dry-run flag (ie. `my -d CONST`).
 Constants are also included in the output of the `definition` location action.
+
+> [!NOTE]
+> **Legacy File Name Support**: MyCE originally used `.myCommand` as the file name.
+> For backward compatibility, the script still supports this legacy name, though `.myCommands` (plural) is now the standard and recommended filename.
 
 #### Importing other files
 
@@ -116,6 +120,39 @@ Use `my list -d` to view commands with their descriptions in a two-column format
 docker.clean      
 docker.ps         List running containers
 tools.now         Get the current date and time
+```
+
+#### Positional Argument Expansion
+
+Commands support multiple ways to reference arguments:
+
+- `$1`, `$2`, `${3}` - Access specific numbered arguments
+- `$@` - Expands to all arguments as separate quoted strings (useful for preserving argument boundaries)
+- `$*` - Expands to all arguments as a single unquoted string
+
+Example:
+
+```ini
+[tools]
+# Using specific positional arguments
+greet=echo "Hello $1, welcome $2"
+
+# Using $@ to pass all arguments as separate items
+run_all=echo "Running with $@"
+
+# Using $* to pass all arguments as a single string
+combine=echo "Combined: $*"
+```
+
+```bash
+>$ my tools.greet Alice bob
+Hello Alice, welcome bob
+
+>$ my tools.run_all file1 file2 file3
+Running with file1 file2 file3
+
+>$ my tools.combine one two three
+Combined: one two three
 ```
 
 #### Magic/Built-In Constants
@@ -266,6 +303,7 @@ Just enter `my list` to view the available commands.
 If you don't like columns, add the `-l` option at the end to show one command per line.
 If you want to view all definitions (including variables), add the `-a` option.
 If you want to see descriptions for commands, add the `-d` option to show them alongside the keys.
+Note that `-d` automatically enables line-by-line view (implies `-l`).
 
 ```shell
 >$ my list
@@ -325,6 +363,7 @@ If not specified, the latest released version will be assumed.
 If you want to grab the latest version from the `main` branch, specify either `head` or `main`.
 
 You may roll-back to a previously release version by specifying the tag.
+Valid tag formats include specific version numbers (e.g., `v26.2.13`), `head` or `main` for the latest development version, and `latest`/`released` for the latest release.
 To view all available tags, see [GitHub Repo Tags](https://github.com/jerrens/MyCE/tags).
 
 ```shell
@@ -358,6 +397,11 @@ my -vvv build
 
 Curious how your `.myCommands` entries will expand, but not brave enough to just try?
 A dry run can be enabled by using the `-d` option.
+Note that in dry run mode, output shows three formatted sections:
+
+- **SRC**: The file and line number where the command is defined
+- **DESC**: The description (if defined for the command)
+- **CMD**: The final expanded command that would be executed
 
 > [!TIP]
 > In dry run mode, the expanded command will be printed, but not executed
@@ -366,6 +410,8 @@ A dry run can be enabled by using the `-d` option.
 >$ my -d pod.con
 ---- THIS IS A DRYRUN! ----
 
+SRC: /home/user/.myCommands:42
+DESC: Execute an interactive bash shell in container
 CMD: podman exec -it my-container bash 
 ```
 
@@ -510,6 +556,71 @@ Password from PWD: "$3cr3+"
 curl -s -H Authorization: Bearer 0123456789ABCDEF https://api.example.com/status
 ```
 
+### Organizing Variables in Sections
+
+While variables are typically defined at the top level, they can also be organized within sections for better organization:
+
+```ini
+[database]
+# Define variables within a section
+HOST=localhost
+PORT=5432
+USER=admin
+
+# Then reference them with dot notation
+connect=mysql -h ${database.HOST} -P ${database.PORT} -u ${database.USER}
+
+[cache]
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+```
+
+This approach keeps related variables grouped together and makes them easier to maintain in larger `.myCommands` files.
+
+#### Include File Path Resolution
+
+Include paths are flexible and support several formats:
+
+```ini
+# Relative paths (resolved from the directory of the current .myCommands file)
+include ./credentials.secret
+include tests/../shared.commands
+
+# Absolute paths
+include /etc/mycommands/shared
+
+# Paths with environment variable expansion
+include $HOME/.mycommands-private
+include $WORKSPACE/.mycommands-local
+```
+
+This flexibility allows you to organize your command definitions across multiple files while keeping credentials separate from version-controlled `.myCommands` files.
+
+### Advanced List Filtering
+
+The `list` command supports grep-style pattern matching for powerful filtering:
+
+```bash
+# Match commands starting with 'pod'
+my list ^pod
+
+# Match commands containing 'deploy'
+my list deploy
+
+# Match section.command patterns
+my list prod\..\*
+
+# Match multiple patterns with alternation
+my list "build|test|deploy"
+```
+
+You can combine pattern filtering with the formatting options:
+
+```bash
+my list -l -d ^docker   # Line-by-line list with descriptions, filtered to commands starting with 'docker'
+my list -a prod         # Include variables, showing all commands/variables containing 'prod'
+```
+
 
 ## Installation
 
@@ -639,6 +750,19 @@ If you'd like to learn more about MyCE, an article can be found at <https://medi
 Testing has been performed in bash and zsh.
 MyCE may work in other shells, but some functionality may not work as expected.
 If you're using a different shell and something is not working as expected, please report these issues.
+
+### Automatic Shell Detection
+
+MyCE automatically detects your shell (bash, zsh, ksh, etc.) and sources the appropriate runtime configuration file:
+
+- Bash → `~/.bashrc`
+- Zsh → `~/.zshrc`  
+- Ksh → `~/.kshrc`
+
+This means your shell aliases, functions, and environment variables defined in these files are automatically available to your commands.
+You can override this behavior with the `-c` option or by setting the `MYCE_RUNCOM` environment variable.
+
+For Bash specifically, MyCE automatically enables alias expansion when sourcing the rc file, allowing aliases defined in `~/.bashrc` to work in myCommands.
 
 **Note on Aliases:**
 

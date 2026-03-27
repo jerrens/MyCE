@@ -34,6 +34,14 @@ test_cases = {
         "description": "Test command execution with quoted arguments containing spaces",
     },
     
+    # Test command execution with $* (all args as single string)
+    "Command execution with $* expansion": {
+        "cmd": "extra.varargs John Doe",
+        "see": "^Variable args: John Doe$",
+        "pwd": "projectE",
+        "description": "Test command execution with $* variable expansion (all arguments as single string)",
+    },
+    
     # Test command execution with variables and positional arguments combined
     "Command execution with vars and args": {
         "cmd": "extra.withvar Smith",
