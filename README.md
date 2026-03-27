@@ -76,6 +76,48 @@ If you want to include `.myCommands` in source control, it is recommended that y
 Values may span multiple lines by ending the line with a `\` char or using the `'''` heredoc style.
 When using either of these continuation forms, any whitespace at the beginning of the consecutive line(s) will be preserved.
 
+#### Optional Descriptions
+
+Command aliases can be documented with optional descriptions by placing a `# description:` comment immediately before the command definition.
+Descriptions are included in the output of dry-run previews (`?` or `-d` option), the `definition` action, and the `list` action with the `-d` flag.
+
+```ini
+[tools]
+# description: Get the current date and time
+now=date +%T
+
+[docker]
+# description: List running containers
+ps=docker ps -a --format "table {{.ID}}\t{{.Image}}\t{{.Status}}"
+
+# Commands without descriptions are also supported
+clean=docker system prune -f
+```
+
+When using `my tools.now ?`, the output will show the description along with the command:
+
+```
+SRC: /home/user/.myCommands:42
+DESC: Get the current date and time
+CMD: date +%T
+```
+
+Use `my definition tools.now` to see which files define the command and their descriptions:
+
+```
+/home/user/.myCommands:42 [tools]⇒ now   Get the current date and time
+/home/user/project/.myCommands:8 [tools]⇒ now   Get the project-specific time format
+```
+
+Use `my list -d` to view commands with their descriptions in a two-column format:
+
+```
+>$ my list -d tools
+docker.clean      
+docker.ps         List running containers
+tools.now         Get the current date and time
+```
+
 #### Magic/Built-In Constants
 
 While most variables are not expanded until execution time (after all `.myCommands` files have been processed and merged), there are special variables that are expanded when parsing through `.myCommands` file entries.
@@ -128,10 +170,10 @@ For example, if you're in a directory with the previous `.myCommands` file:
 # Usage:
 #    my <alias>
 
-~>$ my echo Hello World
+>$ my echo Hello World
 Custom Prefix: Hello World
 
-~>$ my db.backup --gzip
+>$ my db.backup --gzip
 # Runs: podman exec --interactive --tty --rm pod-db mongodump --gzip
 ```
 
@@ -154,13 +196,14 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    my [OPTIONS] [help | version | set | list [-l] [-a] [PATTERN] | KEY [args...]] [?]
+    my [OPTIONS] [help | version | set | list [-l] [-a] [-d] [PATTERN] | KEY [args...]] [?]
 
         <KEY> [...args]             The key of the command to run
 
-        list [-l] [-a] [PATTERN]    List the available command keys.
+        list [-l] [-a] [-d] [PATTERN]    List the available command keys.
                                     Include the '-l' arg to list one key per line.  Default is column view.
                                     Include the '-a' arg to include variables (uppercase)
+                                    Include the '-d' arg to show descriptions.  Implies '-l'
                                     Include a PATTERN to filter the results.
                                         Use grep pattern syntax (e.g., \`my list prod\`)
 
@@ -216,12 +259,13 @@ Will be stored as:
 key=echo "Hello World"
 ```
 
-### `list [-l] [-a] [PATTERN]`
+### `list [-l] [-a] [-d] [PATTERN]`
 
 Can't remember what you used as the key?
 Just enter `my list` to view the available commands.
 If you don't like columns, add the `-l` option at the end to show one command per line.
 If you want to view all definitions (including variables), add the `-a` option.
+If you want to see descriptions for commands, add the `-d` option to show them alongside the keys.
 
 ```shell
 >$ my list
@@ -231,6 +275,16 @@ projA.env.diff                  pod.ls                          swap.status
 projA.env.view                  pod.replace                     test.dblpos1
 projB.env.backup                pod.replace+                    test.dblpos2
 projB.env.diff                  pod.run                         test.dblpos3
+```
+
+To see command descriptions (if they are defined), add the `-d` option:
+
+```shell
+>$ my list -d pod
+The following commands are available:
+pod.con                   Execute an interactive bash shell in container
+pod.ls                    List all containers with details
+pod.log                   Show the container logs
 ```
 
 If you remember part of the command, add a grep pattern as an option filter the responses
@@ -328,6 +382,7 @@ my -c build
 
 A shorthand to preview the command that will be expanded, but not actually run the command is available by adding a trailing `?` on the command.
 When a command that ends with `?` is detected, MyCE will interpret this as a request to print the final command to be executed (and will remove the '?' char).
+The output will include the source file location (SRC), any description (DESC) if defined, and the final command (CMD).
 This shorthand syntax makes it easy to question the command that will be executed, then if it is the command you want, you can:
 
 1. Press UP-ARROW to recall the previous command from history
@@ -336,9 +391,10 @@ This shorthand syntax makes it easy to question the command that will be execute
 
 ```shell
 >$ my pod.con ?
----- THIS IS A DRYRUN! ----
-
+SRC: /home/user/.myCommands:42
+DESC: Execute an interactive bash shell in container
 CMD: podman exec -it my-container bash 
+
 >$ my pod.con 
 root@my-container:/var/www/html# 
 

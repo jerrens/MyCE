@@ -9,7 +9,9 @@ include ./credentials.test
 tmp=echo ~/code/.myCommand
 echo_bin=$BIN_ROOT/echo
 
+# description: Get current date and time in NY timezone
 time=TZ="${TIMEZONE:-America/New_York}" date +"%F %X"
+# description: Get timestamp in YYYYMMDD_HHMMSS format
 timestamp=TZ="${TIMEZONE:-America/New_York}" date +"%Y%m%d_%H%M%S"
 
 multiline=echo "This is a multi-line command \
@@ -48,16 +50,19 @@ SHOULD_Be_Visible=echo "true"
 tmp=echo "hello"
 
 [test]
+# description: Echo the first positional argument
 sub1=echo $1
 sub2=echo "$1"
 sub3=echo "${1}"
 sub4=echo ${1}
 
+# description: Echo with default value if argument not provided
 subdef1=echo ${1:-def}
 subdef2=echo "${1:-def}"
 subdef3=echo "${1:-def} ${2:-ALT}"
 subdef4=echo "${2:-def} ${1:-ALT}"
 
+# description: Test variable substitution with CONST
 var1=echo ${CONST}
 var2=echo $CONST
 var3=echo ${CONST:-default}

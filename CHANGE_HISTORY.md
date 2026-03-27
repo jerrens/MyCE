@@ -1,6 +1,16 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.3.26
+
+* Added support for optional command descriptions in `.myCommands` files using `# description: <text>` comment syntax
+* Descriptions appear in the output of the following:
+  * Dry-run preview (`my key ?` or `my -d key`) shows SRC (file location), DESC (description if defined), and CMD
+  * `my definition <key>` shows descriptions alongside each file's definition
+  * `my list -d [PATTERN]` displays commands with their descriptions in a two-column format
+* File-specific descriptions allow different `.myCommands` files to provide descriptions for commands with the same key without cross-file inheritance
+* Fallback formatting for systems without the `column` utility ensures descriptions display correctly on all platforms
+
 ## 26.3.24
 
 * Removed extra print when using trailing '?' (view command mode)

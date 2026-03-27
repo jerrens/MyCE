@@ -1,0 +1,48 @@
+# Test file for description comments feature
+
+# description: Get the current date and time in America/New_York timezone
+time=TZ="America/New_York" date +"%F %X"
+
+# description: Generate a timestamp in YYYYMMDD_HHMMSS format
+timestamp=TZ="America/New_York" date +"%Y%m%d_%H%M%S"
+
+# Command without description
+simple=echo "hello world"
+
+[tools]
+# description: Check the health status of Tool A with authorization
+health=curl -s -H "Authorization: Bearer ${toolA.APIKey}" https://api.example.com/status
+
+# description: Get configuration from Tool A
+config=curl -s https://api.example.com/config
+
+[testing]
+# description: Echo the first positional argument
+arg1=echo $1
+
+# description: Echo all positional arguments provided
+allargs=echo "$@"
+
+# This command has no description
+noDesc=echo "no description"
+
+# description: Retrieve environment variable, with default fallback
+getenv=echo "${1:-undefined}"
+
+[database]
+# description: Connect to PostgreSQL database
+connect=psql -h localhost -U postgres -d mydb
+
+# description: Run database migration scripts
+migrate=psql -h localhost -U postgres -d mydb -f migrations/
+
+# description:
+empty_description=echo "This has an empty description"
+
+[advanced]
+# description: Multi-line command - install and list packages
+install_and_list=apt-get install -y \
+    curl \
+    wget \
+    vim && \
+    apt-get list --installed | head -20
