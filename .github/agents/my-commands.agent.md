@@ -83,6 +83,126 @@ $ my set section.key "command here"
 | Duplicate keys in merged files | `my definition <key>` shows multiple | Verify precedence (closest dir wins); use diffs or verbose output |
 | Include path breaks | Error about missing file | Check relative vs absolute paths; test with `my -v <key>` to see resolution |
 
+## Conditional Variable Definitions
+
+*Added: March 2026* — Support for `[IF]...[ELSE IF]...[ELSE]...[FI]` blocks allows different definitions based on variable state.
+
+### When to Use Conditionals
+
+- **Environment-specific configuration** — Different values for dev/staging/prod based on a detected variable
+- **Tool selection** — Choose docker vs podman based on available container engine
+- **Feature flags** — Enable/disable debug logging, optional components based on a condition
+- **Hierarchical overrides** — Parent directory sets conditional, child directory overrides the variable
+
+### Conditional Syntax
+
+```bash
+# File: ~/.myCommands
+CONTAINER_ENGINE=podman
+
+[IF $CONTAINER_ENGINE == "podman"]
+  WEB_CONTAINER=cns-dev-pod-web
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+  WEB_CONTAINER=cns-dev-web-1
+[ELSE]
+  WEB_CONTAINER=unknown-container
+[FI]
+
+# File: ~/project/.myCommands
+CONTAINER_ENGINE=docker  # Override → triggers ELSE IF above
+```
+
+### Supported Operators in Conditions
+
+| Operator | Example | Behavior |
+|----------|---------|----------|
+| `==` | `[IF $VAR == "value"]` | String equality check |
+| `!=` | `[IF $VAR != "value"]` | String inequality check |
+| `matches` | `[IF $VAR matches "pod.*"]` | Regex pattern matching |
+| (positive) | `[IF $VAR]` | True if variable is non-empty |
+| (negative) | `[IF !$VAR]` | True if variable is empty or undefined |
+
+### Variable vs. Command Naming Conventions
+
+**CRITICAL:** Keys in `.myCommands` files follow a strict naming convention:
+
+- **ALL_CAPS_KEYS** → Variables, constants, configuration values; NOT executable as commands
+  - Used in conditional blocks `[IF $VAR...]`
+  - Referenced in other commands with `${VAR}`
+  - Excluded from `my list` output (use `my list -a` to include them)
+  - Example: `CONTAINER_ENGINE`, `PROJECT_ROOT`, `DEBUG_LEVEL`, `EXEC_CMD`
+
+- **lowercase.keys** (including dot-notation sections) → Commands/executables; directly callable
+  - Appear in `my list` output
+  - Can be executed: `my command` or `my section.command`
+  - Can contain variable references: `my start` might execute `/path/to/${PROJECT_ROOT}/start.sh`
+  - Example: `echo.web`, `section.test.key`, `tools.health`, `build`
+
+**Why This Matters:**
+- Variables evaluated in conditionals must use ALL_CAPS naming to be distinguished from command keys
+- Attempting to execute an ALL_CAPS key results in "Unknown key or command" error
+- Test cases must use lowercase command names that output the variable values
+
+### Important Implementation Details
+
+**Evaluation Order:**
+1. All `.myCommands` files are loaded and parsed (highest to lowest directory)
+2. Conditionals are stored without evaluating
+3. After all files loaded, conditional blocks are evaluated with final variable values
+4. This allows parent-directory conditionals to use child-directory variable overrides
+
+**Chain Behavior:**
+- In an IF/ELSE IF/ELSE chain, once one condition matches, ALL subsequent blocks are skipped
+- Use nested `[IF]` blocks (not AND/OR operators) for complex multiple-condition logic
+
+**Scope:**
+- Conditional blocks define variables in global scope (not section-scoped)
+- Variables must be defined at root level (outside any `[section]`) to be used in conditionals
+
+### Debugging Conditionals
+
+```bash
+# Check if condition evaluates correctly (use dry-run)
+$ my -v -v KEY?
+
+# Verify all variables in merged state
+$ my list -a
+
+# See which conditional blocks were parsed
+$ my -vv KEY 2>&1 | grep "Evaluating block"
+
+# Trace condition evaluation
+$ my -vv KEY 2>&1 | grep "Condition result"
+```
+
+### Common Conditional Pitfalls
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Condition never matches | Variable undefined when evaluated | Ensure variable is defined before conditional block at same or higher level |
+| ELSE block always executes | Earlier IF matched but definitions not applied | Check for syntax errors in preceding IF block; verify regex patterns |
+| Nested conditional structure breaks | Scope confusion with parent/child blocks | Test with `-v -v` to trace block nesting and scope |
+| Variable override doesn't affect condition | Override in child, condition in parent | This is the designed behavior - override must happen before condition runs |
+| ALL_CAPS variable evaluates to empty | Command tries to execute variable key | Use lowercase command name that echoes/outputs the variable; ALL_CAPS keys aren't executable |
+
+### Testing Conditional Blocks
+
+**Comprehensive test coverage requires testing ALL branches:**
+
+- **Simple IF/ELSE IF/ELSE chains:** Test each branch condition (true, false, fallback to ELSE)
+- **Existence checks:** Test both `[IF $VAR]` true/false and `[IF !$VAR]` true/false
+- **Nested conditionals:** Test all combinations (outer-true+inner-true, outer-true+inner-false, outer-false)
+- **Variable overrides:** Child directories setting variables that affect parent-directory conditionals
+- **Edge cases:** Pre-defined variables (testing when `[IF !$VAR]` is false), unknown values hitting ELSE branches
+
+**Test structure recommendation:**
+
+Create multiple test blueprint subdirectories for each scenario:
+- Base `.myCommands` with [IF/ELSE IF/ELSE/FI] structure and command definitions
+- Child directories with variable overrides for each branch condition
+- Commands that output the conditional variables (e.g., `echo.web=echo "Web: ${VAR}"`)
+- Assertions that verify correct variable values for each branch
+
 ## Expected Collaboration
 
 When assisting users with this agent:

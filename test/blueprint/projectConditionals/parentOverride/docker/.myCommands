@@ -1,0 +1,5 @@
+# Child directory - override container engine to docker
+# This should change the EXEC_CMD from podman to docker because it's evaluated AFTER loading this file
+CONTAINER_ENGINE=docker
+USE_POD=true
+POD_TYPE=prod

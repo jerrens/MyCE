@@ -1,0 +1,3 @@
+# Child directory - set CONTAINER_ENGINE to unknown value
+# This should trigger the ELSE branch (WEB_CONTAINER=unknown-container, CONTAINER_TOOL=unknown)
+CONTAINER_ENGINE=unknown

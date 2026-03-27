@@ -7,7 +7,7 @@
     }
 }
 -->
-<!-- spell-checker:ignore MyCE sdiff kshrc pushd -->
+<!-- spell-checker:ignore MyCE sdiff kshrc pushd shopt -->
 # My Command Engine (MyCE)
 
 **Ditch outdated global aliases: hierarchical, context-aware project commands in pure Bash—no dependencies, no global pollution!**
@@ -44,6 +44,9 @@ Running `my server.start` will execute docker-compose up.
 - **Argument Passing**: Additional arguments provided after the command alias are passed directly to the underlying command. This enables dynamic behavior and flexible command usage.
 - **Fallback to Shell**: If the requested alias is not found in the merged `.myCommands` configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
 - **Cross-Domain Commands with Variables**: Commands can reference variables set in different `.myCommands` files, allowing for reusable, high-level command configurations across directories. This feature is useful for defining generic commands in higher-level folders and reusing them in specific contexts within the workspace.
+- **Conditional Variable Definitions**: Use `[IF]...[ELSE IF]...[ELSE]...[FI]` blocks to conditionally define variables based on conditions.
+This allows environment-specific configurations, tool selection, and feature flags—all from a single `.myCommands` file.
+Conditionals are evaluated after all files are loaded, so child-directory variable overrides affect parent-directory conditionals.
 - **Include Files**: Other files can be included for re-use and/or keeping secret credentials in separate files
 
 
@@ -100,7 +103,7 @@ clean=docker system prune -f
 
 When using `my tools.now ?`, the output will show the description along with the command:
 
-```
+```text
 SRC: /home/user/.myCommands:42
 DESC: Get the current date and time
 CMD: date +%T
@@ -108,14 +111,14 @@ CMD: date +%T
 
 Use `my definition tools.now` to see which files define the command and their descriptions:
 
-```
+```text
 /home/user/.myCommands:42 [tools]⇒ now   Get the current date and time
 /home/user/project/.myCommands:8 [tools]⇒ now   Get the project-specific time format
 ```
 
 Use `my list -d` to view commands with their descriptions in a two-column format:
 
-```
+```shell
 >$ my list -d tools
 docker.clean      
 docker.ps         List running containers
@@ -153,6 +156,99 @@ Running with file1 file2 file3
 
 >$ my tools.combine one two three
 Combined: one two three
+```
+
+#### Conditional Variable Definitions
+
+Commands can be conditionally defined based on variable values using `[IF]...[ELSE IF]...[ELSE]...[FI]` blocks.
+This allows your `.myCommands` files to adapt to different environments without requiring multiple configuration files.
+
+**When to Use:**
+
+- Environment-specific configurations (dev, staging, production)
+- Tool selection based on what's defined in a specific child directory (ie. docker vs podman)
+- Feature flags or debug modes
+- Parent directory conditionals affected by child directory variable overrides
+
+**Syntax:**
+
+```ini
+# Define a variable
+CONTAINER_ENGINE=podman
+
+# Conditional block
+[IF $CONTAINER_ENGINE == "podman"]
+  WEB_CMD=podman run
+  EXEC_CMD=podman exec -it
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+  WEB_CMD=docker run
+  EXEC_CMD=docker exec -it
+[ELSE]
+  WEB_CMD=unknown
+  EXEC_CMD=unknown
+[FI]
+
+# Use the conditional variable in commands
+[ctn]
+# description: Run web application
+web=${WEB_CMD} my-web-app
+
+# description: Execute command in container
+exec=${EXEC_CMD} my-container bash
+```
+
+**Supported Operators:**
+
+| Operator | Example | Behavior |
+| -------- | ------- | -------- |
+| `==` | `[IF $VAR == "value"]` | String equality |
+| `!=` | `[IF $VAR != "value"]` | String inequality |
+| `matches` | `[IF $VAR matches "pod.*"]` | Regex pattern matching |
+| existence (positive) | `[IF $VAR]` | True if variable is non-empty |
+| existence (negative) | `[IF !$VAR]` | True if variable is empty or undefined |
+
+**How It Works:**
+
+1. All `.myCommands` files are loaded and parsed (`~/.myCommands` first, then walks from `/` to `$PWD`)
+2. Conditionals are stored without evaluating during parsing
+3. After all files are loaded, conditionals are evaluated with final variable values
+4. In an IF/ELSE IF/ELSE chain, once one condition matches, subsequent blocks are skipped
+
+**Example with Hierarchical Overrides:**
+
+```ini
+# File: ~/.myCommands
+CONTAINER_ENGINE=podman
+
+[IF $CONTAINER_ENGINE == "podman"]
+  MY_EXEC=podman exec -it
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+  MY_EXEC=docker exec -it
+[FI]
+
+[debug]
+shell=${MY_EXEC} my-container bash
+```
+
+```ini
+# File: ~/project/.myCommands
+# Override the container engine
+CONTAINER_ENGINE=docker
+# Now the ELSE IF branch will be used instead of IF
+```
+
+Running `my debug.shell` from the `~/project` directory will use `docker exec -it` because the child directory's variable override changes which conditional branch executes.
+
+**Debugging Conditionals:**
+
+Use verbose output to trace condition evaluation:
+
+```bash
+# Show which blocks are being evaluated
+>$ my -v key
+
+# Show detailed evaluation including condition results
+>$ my -vv key 2>&1 | grep "Evaluating block"
 ```
 
 #### Magic/Built-In Constants
@@ -587,11 +683,11 @@ include ./credentials.secret
 include tests/../shared.commands
 
 # Absolute paths
-include /etc/mycommands/shared
+include /etc/myCommands/shared
 
 # Paths with environment variable expansion
-include $HOME/.mycommands-private
-include $WORKSPACE/.mycommands-local
+include $HOME/.myCommands-private
+include $WORKSPACE/.myCommands-local
 ```
 
 This flexibility allows you to organize your command definitions across multiple files while keeping credentials separate from version-controlled `.myCommands` files.

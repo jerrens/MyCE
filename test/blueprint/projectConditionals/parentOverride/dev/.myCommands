@@ -1,0 +1,5 @@
+# Child directory - set POD_TYPE to dev (instead of prod)
+# USE_POD is inherited as false from parent, and we set POD_TYPE=dev
+# This tests the ELSE branch of the nested [IF $POD_TYPE == "prod"] condition
+USE_POD=true
+POD_TYPE=dev

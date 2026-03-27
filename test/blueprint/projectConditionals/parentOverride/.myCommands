@@ -1,0 +1,24 @@
+# Parent directory conditional - container engine podman
+CONTAINER_ENGINE=podman
+
+[IF $CONTAINER_ENGINE == "podman"]
+    EXEC_CMD=podman exec -it
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+    EXEC_CMD=docker exec -it
+[FI]
+
+# This tests nested conditionals
+[IF $USE_POD]
+    [IF $POD_TYPE == "prod"]
+        POD_CONFIG=production
+    [ELSE]
+        POD_CONFIG=development
+    [FI]
+[ELSE]
+    POD_CONFIG=not_set
+[FI]
+
+# Commands to test the exec and pod variables
+[echo]
+exec=echo "Exec command is: ${EXEC_CMD}"
+pod=echo "Pod config is: ${POD_CONFIG}"

@@ -1,6 +1,26 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.3.28
+
+* **NEW FEATURE: Conditional Variable Definitions** - Added support for `[IF]...[ELSE IF]...[ELSE]...[FI]` blocks to conditionally define variables based on variable values
+  * Allows environment-specific configurations, tool selection, and feature flags from a single `.myCommands` file
+  * Supports multiple operators: `==` (equality), `!=` (inequality), `matches` (regex), and existence checks `[IF $VAR]` / `[IF !$VAR]`
+  * Conditionals are evaluated after all `.myCommands` files are loaded, enabling child-directory variable overrides to affect parent-directory conditional behavior
+  * Proper IF/ELSE IF/ELSE chain short-circuiting prevents multiple branches from executing
+* Enhanced documentation with comprehensive conditional examples and use cases in README.md
+* Added extensive test coverage for conditional feature including:
+  * All operator types (equality, inequality, regex matching, existence checks)
+  * All conditional branches (IF, ELSE IF, ELSE fallback)
+  * Nested conditional structures with multiple decision paths
+  * Variable override scenarios where child directories affect parent conditionals
+  * Edge cases like pre-defined variables blocking conditional definitions
+* Updated agent documentation (AGENTS.md and my-commands.agent.md) with:
+  * Key/value naming conventions (ALL_CAPS for variables, lowercase for commands)
+  * Conditional implementation details and gotchas discovered during development
+  * Comprehensive test coverage guidelines
+  * Debugging techniques for tracing conditional evaluation
+
 ## 26.3.26
 
 * Added support for optional command descriptions in `.myCommands` files using `# description: <text>` comment syntax

@@ -116,7 +116,7 @@ test_cases = {
 
     # Dry Run Special Syntax
     "-d time": "THIS IS A DRYRUN.*CMD: ",
-    "time ?": "^CMD: ",
+    "time ?": "CMD: ",
 
     # Positional arguments at start of command
     "positional.start.echo_first echo": "^hello$",

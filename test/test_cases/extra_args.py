@@ -71,7 +71,7 @@ test_cases = {
         "cmd": "-v extra.noargs",
         "see": "MYCE_RUNCOM file not found or set to 'false'.*Execute noargs$",
         "pwd": "projectE",
-        "env": {"MYCE_RUNCOM": "/tmp/nonexistent_mycommands_file_12345"},
+        "env": {"MYCE_RUNCOM": "/tmp/nonexistent_myCommands_file_12345"},
         "description": "Test command execution when MYCE_RUNCOM is set to non-existent file",
     },
 }

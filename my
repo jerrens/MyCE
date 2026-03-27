@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.3.26
+__Version=26.3.28
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -394,6 +394,16 @@ declare -A commandDescriptions
 # Stores the file:line location for each command
 declare -A commandLocations
 
+# Conditional processing data structures
+# Maps: blockId (file:startLine) -> condition string (e.g., "VAR==value" or "!VAR" or "VAR matches regex")
+declare -A conditionalConditions
+# Maps: blockId -> space-separated list of definition key=value pairs in this conditional block
+declare -A conditionalDefinitions
+# Array to track the order of conditional blocks for processing
+declare -a conditionalBlockOrder
+# Current nesting level for IF blocks (to handle nesting)
+declare -i conditionalNestingLevel=0
+
 function process_ini_file() {
     log 1 "Loading file: $1"
     local filepath="$1"
@@ -407,6 +417,13 @@ function process_ini_file() {
     local section=""
     local pending_description=""
     local lineNumber=0
+    # Variables for tracking conditional blocks
+    local in_conditional=false
+    local conditional_id=""
+    local conditional_line_num=0
+    local conditional_defs=()
+    local conditional_stack=()  # Stack for nested conditionals
+    
     while IFS= read -r line <&3 || [[ -n "$line" ]]; do
         ((lineNumber++))
         # If the line ends with a continuation character '\', then read the next line and append it
@@ -481,6 +498,100 @@ function process_ini_file() {
             continue
         fi
 
+        # Check for conditional control flow statements [IF], [ELSE IF], [ELSE], [FI]
+        # This must be before section header check since both use brackets
+        if [[ "$line" =~ ^[[:space:]]*\[IF[[:space:]]+(.+)\]$ ]]; then
+            log 2 "Conditional [IF] block detected: ${BASH_REMATCH[1]}"
+            
+            # If we're already in a conditional, push current state to stack for nesting
+            if [[ "$in_conditional" == "true" ]]; then
+                conditional_stack+=("$conditional_id|${conditional_defs[@]}")
+            fi
+            
+            in_conditional=true
+            conditional_id="${filepath}:${lineNumber}"
+            conditional_line_num=$lineNumber
+            conditional_defs=()
+            # Extract and store the condition (everything between [IF and ])
+            local condition_expr="${BASH_REMATCH[1]}"
+            condition_expr="${condition_expr#[[:space:]]}"
+            condition_expr="${condition_expr%[[:space:]]}"
+            conditionalConditions["$conditional_id"]="$condition_expr"
+            log 2 "  Stored condition: '$condition_expr'"
+            continue
+            
+        elif [[ "$line" =~ ^[[:space:]]*\[ELSE[[:space:]]*IF[[:space:]]+(.+)\]$ ]]; then
+            log 2 "Conditional [ELSE IF] block detected: ${BASH_REMATCH[1]}"
+            
+            # Store previous block's definitions
+            if [[ "$in_conditional" == "true" ]]; then
+                if [[ -n "$conditional_id" ]]; then
+                    conditionalDefinitions["$conditional_id"]="${conditional_defs[@]}"
+                    log 2 "  Stored block definitions for: $conditional_id"
+                    conditionalBlockOrder+=("$conditional_id")
+                fi
+            fi
+            
+            # Start new ELSE IF block
+            in_conditional=true
+            conditional_id="${filepath}:${lineNumber}"
+            conditional_line_num=$lineNumber
+            conditional_defs=()
+            local condition_expr="${BASH_REMATCH[1]}"
+            condition_expr="${condition_expr#[[:space:]]}"
+            condition_expr="${condition_expr%[[:space:]]}"
+            # Store as "ELSE IF: ..." to distinguish from IF blocks during evaluation
+            conditionalConditions["$conditional_id"]="ELSE IF: $condition_expr"
+            log 2 "  Stored condition: 'ELSE IF: $condition_expr'"
+            continue
+            
+        elif [[ "$line" =~ ^[[:space:]]*\[ELSE\]$ ]]; then
+            log 2 "Conditional [ELSE] block detected"
+            
+            # Store previous block's definitions
+            if [[ "$in_conditional" == "true" && -n "$conditional_id" ]]; then
+                conditionalDefinitions["$conditional_id"]="${conditional_defs[@]}"
+                log 2 "  Stored block definitions for: $conditional_id"
+                conditionalBlockOrder+=("$conditional_id")
+            fi
+            
+            # Start ELSE block (special condition: always true if reached)
+            in_conditional=true
+            conditional_id="${filepath}:${lineNumber}"
+            conditional_line_num=$lineNumber
+            conditional_defs=()
+            conditionalConditions["$conditional_id"]="ELSE"  # Special marker
+            log 2 "  ELSE block started"
+            continue
+            
+        elif [[ "$line" =~ ^[[:space:]]*\[FI\]$ ]]; then
+            log 2 "Conditional [FI] block terminator detected"
+            
+            # Store final block's definitions
+            if [[ "$in_conditional" == "true" && -n "$conditional_id" ]]; then
+                conditionalDefinitions["$conditional_id"]="${conditional_defs[@]}"
+                log 2 "  Stored final block definitions for: $conditional_id"
+                conditionalBlockOrder+=("$conditional_id")
+            fi
+            
+            # Handle nested conditionals
+            if [[ ${#conditional_stack[@]} -gt 0 ]]; then
+                # Pop from stack
+                local last_idx=$((${#conditional_stack[@]} - 1))
+                local popped="${conditional_stack[$last_idx]}"
+                unset 'conditional_stack[$last_idx]'
+                
+                # Restore previous state
+                IFS='|' read -r conditional_id conditional_defs_str <<< "$popped"
+                conditional_defs=($conditional_defs_str)
+            else
+                in_conditional=false
+                conditional_id=""
+                conditional_defs=()
+            fi
+            continue
+        fi
+
         # Check for section headers
         if [[ "$line" =~ ^\[.*\]$ ]]; then
             log 2 "Section Header detected: ${line:1:-1}"
@@ -517,26 +628,33 @@ function process_ini_file() {
 
         # Before adding the key-value pair to the associative array,
         # add the key to the indexed array to preserve the order.
-        if [[ ! -v commands["$key"] ]]; then
-            log 3 "  ADD:      ${key} = ${value}"
+        if [[ "$in_conditional" == "true" ]]; then
+            # We're inside a conditional block - accumulate the definition
+            log 3 "  CONDITIONAL DEF:  ${key} = ${value}"
+            conditional_defs+=("${key}=${value}")
         else
-            log 2 "  REPLACE:  ${key} = ${value}"
-            log 2 "              was '${commands[$key]}'"
-        fi
+            # Normal key-value pair (not in conditional block)
+            if [[ ! -v commands["$key"] ]]; then
+                log 3 "  ADD:      ${key} = ${value}"
+            else
+                log 2 "  REPLACE:  ${key} = ${value}"
+                log 2 "              was '${commands[$key]}'"
+            fi
 
-        commands["$key"]=$value
-        
-        # Store the file location for this command (file:lineNumber)
-        commandLocations["$key"]="${filepath}:${lineNumber}"
-        
-        # Store the description if one was provided
-        if [[ -n "$pending_description" ]]; then
-            commandDescriptions["$key"]="$pending_description"
-            log 3 "  DESC:     ${key} = '${pending_description}'"
-            pending_description=""  # Reset for next command
-        else
-            # Clear any previous description if this key doesn't have one
-            commandDescriptions["$key"]=""
+            commands["$key"]=$value
+            
+            # Store the file location for this command (file:lineNumber)
+            commandLocations["$key"]="${filepath}:${lineNumber}"
+            
+            # Store the description if one was provided
+            if [[ -n "$pending_description" ]]; then
+                commandDescriptions["$key"]="$pending_description"
+                log 3 "  DESC:     ${key} = '${pending_description}'"
+                pending_description=""  # Reset for next command
+            else
+                # Clear any previous description if this key doesn't have one
+                commandDescriptions["$key"]=""
+            fi
         fi
         # echo "     4 - $key=${commands["$key"]}"
     # done < "$1"
@@ -548,6 +666,14 @@ function process_ini_file() {
 # keys and values found in ${MY_CUSTOM_FILE} files.  The values closest to the
 # current directory are used
 function load_my_custom_files() {
+    # Clear any previously loaded data structures
+    commands=()
+    commandDescriptions=()
+    commandLocations=()
+    conditionalConditions=()
+    conditionalDefinitions=()
+    conditionalBlockOrder=()
+    
     # Start in the current directory and move up the directory tree
     declare -a file_paths
     dir=$(pwd)
@@ -625,6 +751,202 @@ function findKey() {
 
     # If here, then the key was not found
     return 1
+}
+
+# Evaluates all conditional blocks that were parsed from .myCommands files
+# and merges matching conditional definitions into the commands array
+# Properly handles IF/ELSE IF/ELSE chains - once one matches, rest are skipped
+function evaluate_conditionals() {
+    log 1 "Evaluating conditional blocks..."
+    local total_blocks=${#conditionalBlockOrder[@]}
+    log 1 "  Found $total_blocks conditional blocks to evaluate"
+    
+    if [[ $total_blocks -eq 0 ]]; then
+        log 1 "  No conditional blocks to evaluate"
+        return 0
+    fi
+    
+    # Track which IF blocks have already matched (by their first block in the chain)
+    declare -A chain_head_matched  # Tracks which chain heads have matched
+    local current_chain_head=""   # Track the first block ID of current chain
+    
+    # Process each conditional block
+    for block_id in "${conditionalBlockOrder[@]}"; do
+        local condition="${conditionalConditions[$block_id]}"
+        local defs="${conditionalDefinitions[$block_id]}"
+        
+        log 1 "  Evaluating block: $block_id"
+        log 2 "    Condition: $condition"
+        log 3 "    Definitions: $defs"
+        
+        local condition_result=false
+        local should_apply=true
+        
+        # Track chain membership: IF starts new chain, ELSE/ELSE IF continue it
+        if [[ "$condition" != "ELSE" && ! "$condition" =~ ^ELSE\ IF ]]; then
+            # This is an IF block - start of a new chain
+            current_chain_head="$block_id"
+            chain_head_matched["$current_chain_head"]=""  # Reset for new chain
+            log 3 "    Starting new conditional chain: $current_chain_head"
+        fi
+        
+        # Check if this chain has already matched
+        if [[ -n "${chain_head_matched[$current_chain_head]}" ]] && [[ "${chain_head_matched[$current_chain_head]}" == "true" ]]; then
+            log 3 "    Skipping block - another block in same chain already matched"
+            should_apply=false
+        fi
+        
+        if [[ "$should_apply" == "true" ]]; then
+            # Special case: ELSE block (always true if reached and chain hasn't matched)
+            if [[ "$condition" == "ELSE" ]]; then
+                log 2 "    ELSE block - evaluating as true"
+                condition_result=true
+            else
+                # Evaluate the condition
+                condition_result=$(__evaluate_condition "$condition")
+            fi
+            
+            log 2 "    Condition result: $condition_result"
+            
+            # If condition is true, merge the definitions and mark chain as matched
+            if [[ "$condition_result" == "true" ]]; then
+                log 2 "    Applying conditional definitions..."
+                # Split the definitions by space and process each key=value pair
+                for def in $defs; do
+                    if [[ -n "$def" && "$def" == *"="* ]]; then
+                        IFS='=' read -r key value <<< "$def"
+                        
+                        # Trim whitespace if needed (definitions were stored as-is)
+                        key="${key#"${key%%[![:space:]]*}"}"
+                        key="${key%"${key##*[![:space:]]}"}"
+                        value="${value#"${value%%[![:space:]]*}"}"
+                        value="${value%"${value##*[![:space:]]}"}"
+                        
+                        log 3 "      Applying: $key = $value"
+                        commands["$key"]="$value"
+                    fi
+                done
+                
+                # Mark this chain as matched so subsequent blocks in chain are skipped
+                chain_head_matched["$current_chain_head"]="true"
+            fi
+        fi
+    done
+    
+    log 1 "  Completed conditional evaluation"
+    return 0
+}
+
+# Helper function to evaluate a single condition expression
+# Supports: VAR==value, VAR!=value, VAR matches regex, VAR (non-empty), !VAR (empty)
+function __evaluate_condition() {
+    local condition="$1"
+    log 3 "    __evaluate_condition: '$condition'"
+    
+    # Strip "ELSE IF: " prefix if present (used to distinguish from IF blocks)
+    if [[ "$condition" =~ ^ELSE\ IF:\ (.*)$ ]]; then
+        condition="${BASH_REMATCH[1]}"
+        log 3 "      Stripped ELSE IF prefix, evaluating: '$condition'"
+    fi
+    
+    # Trim whitespace
+    condition="${condition#"${condition%%[![:space:]]*}"}"
+    condition="${condition%"${condition##*[![:space:]]}"}"
+    
+    # Check for existence (negative) - [IF !$VAR]
+    if [[ "$condition" =~ ^![[:space:]]*\$([a-zA-Z_][a-zA-Z0-9_]*)$ ]]; then
+        local var_name="${BASH_REMATCH[1]}"
+        log 3 "      Checking if variable is empty: $var_name"
+        
+        if findKey "$var_name"; then
+            local var_value="$foundKey_value"
+            if [[ -z "$var_value" ]]; then
+                echo "true"
+                return 0
+            fi
+        else
+            # Variable doesn't exist, so it's "empty"
+            echo "true"
+            return 0
+        fi
+        echo "false"
+        return 0
+    fi
+    
+    # Check for existence (positive) - [IF $VAR]
+    if [[ "$condition" =~ ^\$([a-zA-Z_][a-zA-Z0-9_]*)$ ]]; then
+        local var_name="${BASH_REMATCH[1]}"
+        log 3 "      Checking if variable is non-empty: $var_name"
+        
+        if findKey "$var_name"; then
+            local var_value="$foundKey_value"
+            if [[ -n "$var_value" ]]; then
+                echo "true"
+                return 0
+            fi
+        fi
+        echo "false"
+        return 0
+    fi
+    
+    # Check for regex match - VAR matches "pattern"
+    if [[ "$condition" =~ ^([[:space:]]*)\$([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]+matches[[:space:]]+\"(.*)\"[[:space:]]*$ ]]; then
+        local var_name="${BASH_REMATCH[2]}"
+        local pattern="${BASH_REMATCH[3]}"
+        log 3 "      Checking regex match: $var_name matches \"$pattern\""
+        
+        if findKey "$var_name"; then
+            local var_value="$foundKey_value"
+            if [[ "$var_value" =~ $pattern ]]; then
+                echo "true"
+                return 0
+            fi
+        fi
+        echo "false"
+        return 0
+    fi
+    
+    # Check for equality - VAR == "value"
+    if [[ "$condition" =~ ^([[:space:]]*)\$([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*==[[:space:]]*\"(.*)\"[[:space:]]*$ ]]; then
+        local var_name="${BASH_REMATCH[2]}"
+        local expected_value="${BASH_REMATCH[3]}"
+        log 3 "      Checking equality: $var_name == \"$expected_value\""
+        
+        if findKey "$var_name"; then
+            local var_value="$foundKey_value"
+            if [[ "$var_value" == "$expected_value" ]]; then
+                echo "true"
+                return 0
+            fi
+        fi
+        echo "false"
+        return 0
+    fi
+    
+    # Check for inequality - VAR != "value"
+    if [[ "$condition" =~ ^([[:space:]]*)\$([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*!=[[:space:]]*\"(.*)\"[[:space:]]*$ ]]; then
+        local var_name="${BASH_REMATCH[2]}"
+        local expected_value="${BASH_REMATCH[3]}"
+        log 3 "      Checking inequality: $var_name != \"$expected_value\""
+        
+        if findKey "$var_name"; then
+            local var_value="$foundKey_value"
+            if [[ "$var_value" != "$expected_value" ]]; then
+                echo "true"
+                return 0
+            fi
+        else
+            # Variable doesn't exist, so it's != to any value
+            echo "true"
+            return 0
+        fi
+        echo "false"
+        return 0
+    fi
+    
+    log 0 "WARNING: Could not parse condition: '$condition'"
+    echo "false"
+    return 0
 }
 
 
@@ -980,6 +1302,9 @@ function find_and_run_cmd() {
     shift
 
     load_my_custom_files
+
+    # Evaluate any conditional blocks that were parsed from the .myCommands files
+    evaluate_conditionals
 
     # Now that we have the combined keys, search for the key entered
     if findKey "$cmd"; then

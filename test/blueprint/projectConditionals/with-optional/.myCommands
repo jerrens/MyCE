@@ -1,0 +1,3 @@
+# Child directory - pre-define OPTIONAL_VAR so [IF !$OPTIONAL_VAR] condition is false
+# This tests that when a variable already exists, the conditional [IF !$VAR] is skipped
+OPTIONAL_VAR=pre_defined_value

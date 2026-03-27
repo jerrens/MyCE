@@ -1,0 +1,38 @@
+# Test file for conditional variable definitions
+
+# Base configuration
+CONTAINER_ENGINE=podman
+
+# Conditional definitions based on container engine
+[IF $CONTAINER_ENGINE == "podman"]
+    WEB_CONTAINER=cns-dev-pod-web
+    CONTAINER_TOOL=podman
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+    WEB_CONTAINER=cns-dev-web-1
+    CONTAINER_TOOL=docker
+[ELSE]
+    WEB_CONTAINER=unknown-container
+    CONTAINER_TOOL=unknown
+[FI]
+
+# Conditional based on existence check
+[IF $ENABLE_DEBUG]
+    DEBUG_LEVEL=verbose
+[ELSE]
+    DEBUG_LEVEL=quiet
+[FI]
+
+# Conditional within root scope
+[IF !$OPTIONAL_VAR]
+    OPTIONAL_VAR=default_optional
+[FI]
+
+# Commands that use the conditional variables (root scope)
+[echo]
+web=echo "Web container is: ${WEB_CONTAINER}"
+tool=echo "Container tool is: ${CONTAINER_TOOL}"
+debug=echo "Debug level is: ${DEBUG_LEVEL}"
+optional=echo "Optional var is: ${OPTIONAL_VAR}"
+
+[section]
+test.key=echo "basic_value"

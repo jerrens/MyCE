@@ -1,0 +1,10 @@
+CONTAINER_ENGINE=docker
+ENABLE_DEBUG=true
+
+# Simple test
+SIMPLE_VAR=test_value
+
+[IF $SIMPLE_VAR == "test_value"]
+    RESULT=matched
+[FI]
+

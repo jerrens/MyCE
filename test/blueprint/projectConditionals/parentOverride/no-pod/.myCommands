@@ -1,0 +1,4 @@
+# Child directory - don't set USE_POD (or set to empty)
+# This tests the ELSE branch of the [IF $USE_POD] conditional
+# POD_CONFIG should be set to "not_set"
+# (no USE_POD variable defined, so the outer IF condition is false)
