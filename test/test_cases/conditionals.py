@@ -115,4 +115,40 @@ test_cases = {
         "see": "^Pod config is: not_set$",
         "description": "Test nested [IF] ELSE branch - USE_POD not set triggers outer [ELSE]"
     },
+    
+    # =========================================================================
+    # REGRESSION TESTS: Command/Variable Listing (grep pattern fix)
+    # =========================================================================
+    # Issue: Commands with uppercase endings (e.g., checkCT) were excluded from
+    # `my list` output due to incorrect grep pattern that checked the END of
+    # the string instead of looking for presence of lowercase letters.
+    # See: https://github.com/[repo]/issues/[issue] - March 2026 fix
+    
+    "list contains mixed-case command": {
+        "cmd": "list -l",
+        "pwd": "projectConditionals",
+        "see": "checkCT",
+        "description": "REGRESSION: Mixed-case commands like checkCT should appear in list (not excluded for uppercase ending)"
+    },
+    
+    "list excludes root variables": {
+        "cmd": "list -l",
+        "pwd": "projectConditionals",
+        "see": "checkCT.*(?!CONTAINER_ENGINE)",
+        "description": "REGRESSION: All-caps variables should NOT appear while commands like checkCT do"
+    },
+    
+    "list includes section commands": {
+        "cmd": "list -l",
+        "pwd": "projectConditionals",
+        "see": "section\\.test\\.key",
+        "description": "REGRESSION: Commands in sections should appear if final segment has lowercase"
+    },
+    
+    "list includes all expected commands": {
+        "cmd": "list -l",
+        "pwd": "projectConditionals",
+        "see": "checkCT",
+        "description": "REGRESSION: All expected commands should be in list with correct grep pattern"
+    },
 }

@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.3.28
+__Version=26.3.30
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -1029,7 +1029,7 @@ function list_keys() {
             grepCMD='grep "^[a-zA-Z]"'
         else
             log 1 "Excluding Vars"
-            grepCMD='grep "\\.\?[^A-Z_-]\+$"'
+            grepCMD='grep "^[a-z][^.]*$\|\\.[^.]*[a-z]"'
         fi
 
         local words

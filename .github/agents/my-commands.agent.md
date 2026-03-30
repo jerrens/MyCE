@@ -63,6 +63,43 @@ $ my -v -v section.key
 $ my set section.key "command here"
 ```
 
+### Testing with Absolute Paths (IMPORTANT)
+
+**Why This Matters:** When multiple versions of the `my` script exist on a system (e.g., one globally installed, one in a development workspace), using the unqualified command name will invoke whichever `my` appears first in the PATH. This bypasses code changes and fixes made to the development copy.
+
+**Determine Repo Path:**
+
+```bash
+# Find the root of the current MyCE git repository
+$ git rev-parse --show-toplevel
+/home/user/code/bash/MyCE
+
+# Store as a variable for convenient use
+$ REPO_ROOT=$(git rev-parse --show-toplevel)
+```
+
+**Run Tests with Absolute Path:**
+
+```bash
+# GOOD: Uses the development version with your changes
+$ ${REPO_ROOT}/my list -d
+$ ${REPO_ROOT}/my section.key?
+$ ${REPO_ROOT}/my -v -v section.key
+
+# RISKY: May use wrong `my` from system PATH
+$ my list -d  # ❌ Don't do this
+
+# From any directory, reference the development script
+$ /full/path/to/MyCE/my list -d
+$ cd ~/projects/subdir && /full/path/to/MyCE/my mycommand
+```
+
+**When Assisting Users:**
+- Always verify which `my` script is being used: `which my`
+- When recommending test commands, use the absolute path to the development repository fork
+- Ask users to check `git rev-parse --show-toplevel` if testing seems to use wrong version
+- Remember: changes to the script only take effect when using the absolute path
+
 ## Workflow for Debugging
 
 1. **Inspect the command definition** — `my definition <key>` → shows file and line
@@ -124,24 +161,101 @@ CONTAINER_ENGINE=docker  # Override → triggers ELSE IF above
 
 ### Variable vs. Command Naming Conventions
 
-**CRITICAL:** Keys in `.myCommands` files follow a strict naming convention:
+**CRITICAL:** Keys in `.myCommands` files follow a strict naming convention that distinguishes between variables (configuration) and commands (executables):
 
-- **ALL_CAPS_KEYS** → Variables, constants, configuration values; NOT executable as commands
-  - Used in conditional blocks `[IF $VAR...]`
-  - Referenced in other commands with `${VAR}`
+#### Variables (ALL_CAPS Format)
+
+- **Format:** `UPPERCASE_WITH_UNDERSCORES` or `UPPERCASE-WITH-DASHES`
+- **Characteristics:**
+  - Composed only of uppercase letters, digits, underscores, or dashes
+  - NOT directly callable with `my VARIABLE_NAME` (this will fail with "Unknown key or command")
+  - Used as configuration values and in conditional expressions
   - Excluded from `my list` output (use `my list -a` to include them)
-  - Example: `CONTAINER_ENGINE`, `PROJECT_ROOT`, `DEBUG_LEVEL`, `EXEC_CMD`
+  - Referenced within commands using `${VAR}` syntax
+  - Used in `[IF]` conditional blocks: `[IF $VAR == "value"]`
 
-- **lowercase.keys** (including dot-notation sections) → Commands/executables; directly callable
-  - Appear in `my list` output
-  - Can be executed: `my command` or `my section.command`
-  - Can contain variable references: `my start` might execute `/path/to/${PROJECT_ROOT}/start.sh`
-  - Example: `echo.web`, `section.test.key`, `tools.health`, `build`
+- **Examples:**
+  - `CONTAINER_ENGINE=podman`
+  - `PROJECT_ROOT=/path/to/project`
+  - `DEBUG_LEVEL=verbose`
+  - `ENABLE_FEATURE=true`
+  - `API_KEY=secret123`
 
-**Why This Matters:**
-- Variables evaluated in conditionals must use ALL_CAPS naming to be distinguished from command keys
-- Attempting to execute an ALL_CAPS key results in "Unknown key or command" error
-- Test cases must use lowercase command names that output the variable values
+- **Common Mistake:** Trying to execute a variable
+  ```bash
+  $ my DEBUG_LEVEL          # ❌ FAILS - Not executable
+  Unknown key or command: DEBUG_LEVEL
+  
+  $ my debug.level          # ✓ CORRECT - This would be a lowercase command
+  ```
+
+#### Commands (lowercase Format)
+
+- **Format:** `lowercase`, `section.command`, or `section.subsection.command`
+- **Characteristics:**
+  - Start with a lowercase letter (allowing cases like `checkCT` where tail is uppercase)
+  - Contain at least one lowercase letter anywhere in the key
+  - Directly callable: `my command` or `my section.command`
+  - Appear in `my list` output automatically
+  - Can reference variables with `${VAR}` syntax
+  - Section prefix is lowercase, but command part can have mixed case
+  - Examples: `checkCT`, `section.VAR2`, `pod.stats`, `echo.web`
+
+- **Examples:**
+  - `my echo.web` — Simple command in section
+  - `my checkCT` — Mixed case (starts lowercase, ends uppercase)
+  - `my pod.stats` — Section with lowercase command
+  - `my section.cmd2` — Section with lowercase command
+
+- **Pattern Distinction:**
+  - `VAR1=value` → ALL_CAPS → **Variable** (excluded from `my list`)
+  - `section.VAR2=value` → Section + ALL_CAPS → **Variable** (excluded from `my list`)
+  - `cmd1=value` → starts lowercase → **Command** (included in `my list`)
+  - `section.cmd2=value` → Section + lowercase command → **Command** (included in `my list`)
+
+#### When Stored Across Sections
+
+Keys are stored as `section.key` when used within `[section]` blocks:
+
+```ini
+# File: .myCommands
+
+VAR1=hide                          # Simple variable
+cmd1=keep                          # Simple command
+
+[section]
+VAR2=hide                          # Section variable → stored as "section.VAR2"
+cmd2=keep                          # Section command → stored as "section.cmd2"
+
+[echo]
+WEB=hide                           # Section variable → stored as "echo.WEB"
+web=keep                           # Section command → stored as "echo.web"
+```
+
+Storage and `my list` behavior:
+- `VAR1` — Excluded (all uppercase)
+- `cmd1` — Included (has lowercase)
+- `section.VAR2` — Excluded (final segment is all uppercase)
+- `section.cmd2` — Included (final segment has lowercase)
+- `echo.WEB` — Excluded (final segment is all uppercase)
+- `echo.web` — Included (final segment has lowercase)
+
+#### Testing Variables vs. Commands
+
+To verify a variable's value, create a lowercase command that outputs it:
+
+```ini
+# Wrong approach:
+MYVAR=myvalue
+# $ my MYVAR              # ❌ Fails - MYVAR not callable
+
+# Correct approach:
+MYVAR=myvalue
+show.myvar=echo "MYVAR is: ${MYVAR}"
+# $ my show.myvar         # ✓ Works - outputs "MYVAR is: myvalue"
+```
+
+Why This Matters:
 
 ### Important Implementation Details
 

@@ -1,6 +1,11 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.3.30
+
+* **BugFix: Some commands missing in  `my list` output and not available for autocomplete** - Fixed grep pattern that was incorrectly excluding commands with uppercase endings
+* **Test Coverage:** Added regression tests ensuring mixed-case commands appear in list while all-uppercase variables remain excluded
+
 ## 26.3.28
 
 * **NEW FEATURE: Conditional Variable Definitions** - Added support for `[IF]...[ELSE IF]...[ELSE]...[FI]` blocks to conditionally define variables based on variable values

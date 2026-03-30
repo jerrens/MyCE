@@ -183,12 +183,22 @@ CONTAINER_ENGINE=docker  # Override → affects conditional above
 When working on MyCE tasks:
 
 1. **Testing Commands:** Always use dry-run mode (`?` suffix) to preview commands before recommending execution
-2. **Syntax Validation:** Understand INI format edge cases (colons, special chars, whitespace)
-3. **Variable Scope:** Remember that variables work across merged `.myCommands` files but closest file wins
-4. **Include Paths:** When suggesting includes, clarify absolute vs. relative path context
-5. **Shell Compatibility:** Consider bash compatibility (not all features work in all shells)
-6. **Help Content:** Reference the built-in help with `my help` for accurate command syntax
-7. **Conditionals:** When using `[IF]` blocks, remember they evaluate after all files load; child-directory variable overrides will affect parent-directory conditionals
+2. **Absolute Paths When Testing:** Use the full path to the `my` script under development: `/path/to/MyCE/my` instead of just `my`
+   - Multiple versions of `my` may exist on a system (global install vs. development repo)
+   - `which my` may not point to the development copy
+   - Code changes only take effect when invoking the correct script
+   - Users should find repo root with: `git rev-parse --show-toplevel`
+3. **Syntax Validation:** Understand INI format edge cases (colons, special chars, whitespace)
+4. **Variable vs. Command Naming:**
+   - ALL_CAPS keys are variables (config values, conditional references) — NOT directly executable
+   - lowercase keys are commands (callable with `my command`) — appear in `my list`
+   - Keys in sections are stored as `section.key` and follow same naming rules (only final segment matters for command vs. variable)
+   - Never try to execute a variable with `my VARIABLE` — create a lowercase command that outputs the variable instead
+5. **Variable Scope:** Remember that variables work across merged `.myCommands` files but closest file wins
+6. **Include Paths:** When suggesting includes, clarify absolute vs. relative path context
+7. **Shell Compatibility:** Consider bash compatibility (not all features work in all shells)
+8. **Help Content:** Reference the built-in help with `my help` for accurate command syntax
+9. **Conditionals:** When using `[IF]` blocks, remember they evaluate after all files load; child-directory variable overrides will affect parent-directory conditionals
 
 ## Implementation Notes for Future Developers
 

@@ -27,6 +27,8 @@ CONTAINER_ENGINE=podman
     OPTIONAL_VAR=default_optional
 [FI]
 
+checkCT=echo "Using $CONTAINER_ENGINE"
+
 # Commands that use the conditional variables (root scope)
 [echo]
 web=echo "Web container is: ${WEB_CONTAINER}"
