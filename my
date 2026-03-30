@@ -147,32 +147,39 @@ fi
 
 
 # Either runs the command or prints the command that would be executed if DRYRUN is 'true'
-#  <cmd> cmd - Command to execute or print
+#  Command and arguments are passed as parameters
 function runCMD() {
-    local source_location="$1"  # New parameter: file:line for the command
-    local desc="$2"             # Description parameter
-    shift 2                      # Consume both source_location and desc
+    local cmd_string=$1
+    shift
     
     if [[ "${DRYRUN}" == "true" ]]; then
-        # Output SRC line (always if source_location is set)
-        if [[ -n "$source_location" ]]; then
-            log 0 "SRC: ${source_location}"
-        fi
-        
-        # Output DESC line only if description is defined and not empty
-        if [[ -n "$desc" ]]; then
-            log 0 "DESC: ${desc}"
+        # Look up source location and description if available (for commands from .myCommands files)
+        if [[ -n "$__current_cmd" ]]; then
+            local source_location="${commandLocations["$__current_cmd"]:-}"
+            local desc="${commandDescriptions["$__current_cmd"]:-}"
+            
+            # Output SRC line if available
+            if [[ -n "$source_location" ]]; then
+                log 0 "SRC: ${source_location}"
+            fi
+            
+            # Output DESC line if available
+            if [[ -n "$desc" ]]; then
+                log 0 "DESC: ${desc}"
+            fi
         fi
         
         # Replace any line wrap chars with an escaped version for the print
-        dryCMD="CMD: $*"
+        dryCMD="CMD: $cmd_string"
+        # Append remaining arguments if any
+        if [[ $# -gt 0 ]]; then
+            dryCMD="$dryCMD $*"
+        fi
         log 0 "${dryCMD//\\n/\\\\n}"
         return
     fi
 
-    # For normal execution, first parameter is the command string
-    local cmd_string=$1
-    shift
+    # For normal execution, build the full command
     local -a full_cmd=( "$cmd_string" "$@" )
 
     log 3 "Executing: ${full_cmd[*]}"
@@ -190,29 +197,10 @@ function runCMD() {
         log 2 "MYCE_RUNCOM = ${MYCE_RUNCOM}"
     fi
 
-    # Original execution of the command
-    # eval "${full_cmd[@]}"
-
-
-    # Attempt to filter STDERR, but has some false positives
-    # eval "${full_cmd[@]}" 2> >(grep -v "^$0" || echo "Unknown Command" >&2)
-
-
     # Filter STDERR output provide a helpful error message if
     # problem originated by this script (the eval command)
     # but allow STDERR from the executed command to pass through
     eval "${full_cmd[@]}" 2> >(awk -v prefix="$0" '{ if ($0 ~ "^" prefix) { print "Unknown key or command. See `'$__AppName' list` for known keys" } else { print $0 } }' >&2)
-
-
-    # Alternative is to use a named pipe to filter responses
-    # tmpfile="/tmp/fifo.$$"
-    # mkfifo $tmpfile
-
-    # #Filter STDERR and pass to the terminal
-    # grep -v "^$0" < $tmpfile >&2 &
-
-    # eval "${full_cmd[@]}" 2> $tmpfile
-    # rm $tmpfile
 }
 
 # Function to add or update a key-value pair in an INI file
@@ -393,6 +381,9 @@ declare -A commands
 declare -A commandDescriptions
 # Stores the file:line location for each command
 declare -A commandLocations
+
+# Global variable to track the current command being executed (for DRYRUN metadata lookup)
+declare -g __current_cmd=""
 
 # Conditional processing data structures
 # Maps: blockId (file:startLine) -> condition string (e.g., "VAR==value" or "!VAR" or "VAR matches regex")
@@ -1433,18 +1424,18 @@ function find_and_run_cmd() {
         log 2 "Expanded command to be executed:\n    $binary_cmd\n"
 
         # Run the extracted command with the additional arguments
-        # Pass source location and description (if any) to runCMD
+        __current_cmd="$cmd"  # Set global for DRYRUN metadata lookup
         local args
         if [ $# -gt 0 ]; then
             printf -v args '%q ' "$@"
         fi
-        local desc="${commandDescriptions["$cmd"]:-}"
-        runCMD "${commandLocations["$cmd"]}" "$desc" "$binary_cmd" "$args"
+        runCMD "$binary_cmd" $args
 
     else
         # If the key was not found in any ${MY_CUSTOM_FILE} files, run the default command
         log 1 "No ${MY_CUSTOM_FILE} file was found in the current directory tree containing '$cmd'\n"
-        runCMD "" "" "$cmd $*"
+        __current_cmd=""  # Clear for utility command (no metadata available)
+        runCMD "$cmd" "$@"
     fi
 }
 
@@ -1509,11 +1500,11 @@ function update_script() {
         case ${1} in
             update ) ;; # Expected for first arg
             diff ) show_diff=true ;;
-            # head|main ) tag=head ;;
-            # released ) tag=released ;;
+            head|main ) tag="head" ;;
+            released ) tag="released" ;;
 
             # Assume the given value is a version number (vYY.mm.dd), head, main, or released
-            * ) tag=${1} ;;
+            * ) tag="${1}" ;;
         esac
         shift
     done
@@ -1566,17 +1557,24 @@ function update_script() {
 
     if [ "$EUID" -ne 0 ]; then
         log 0 "This should be run as root.  Attempting to elevate permissions..."
+        log 1 "runCMD XXdo $0 $__origArgs"
 
         # Re-run this command as sudo
         if [[ $(type -t dzdo) == "file" ]]; then
+            log 2 "Using dzdo for privilege escalation"
             runCMD dzdo "$0" "$__origArgs"
         else
+            log 2 "Using sudo for privilege escalation"
             runCMD sudo "$0" "$__origArgs"
         fi
         exit
     fi
     # NOTE: Root Level if here
 
+    log 1 "Downloading and installing MyCE from GitHub..."
+    log 2 "Temp file will be stored at: ${temp_file}"
+    log 2 "Repo: ${repo}"
+    log 2 "Tag: ${tag}"
     download_latest_release "${temp_file}" "${repo}" "${tag}"
 
     log 0 "Updating from v${__Version} to ${tag}..."

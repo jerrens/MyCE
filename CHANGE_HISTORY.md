@@ -5,6 +5,9 @@
 
 * **BugFix: Some commands missing in  `my list` output and not available for autocomplete** - Fixed grep pattern that was incorrectly excluding commands with uppercase endings
 * **Test Coverage:** Added regression tests ensuring mixed-case commands appear in list while all-uppercase variables remain excluded
+* **BugFix: Update action not working as expected**
+  * Changes introduced recently for printing source and description during dry runs modified the runCMD function arguments.
+  * Reverted to previous signature and updated how Source location and description are looked up when DRYRUN mode is enabled, reducing unnecessary parameter passing
 
 ## 26.3.28
 
