@@ -1,6 +1,11 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.4.11
+
+* Fix to allow ANSI colors from executed commands to flow through to the current terminal while still providing a helpful error to the user for unknown commands
+
+
 ## 26.3.30
 
 * **BugFix: Some commands missing in  `my list` output and not available for autocomplete** - Fixed grep pattern that was incorrectly excluding commands with uppercase endings

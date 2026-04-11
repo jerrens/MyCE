@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.3.30
+__Version=26.4.11
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -197,10 +197,17 @@ function runCMD() {
         log 2 "MYCE_RUNCOM = ${MYCE_RUNCOM}"
     fi
 
-    # Filter STDERR output provide a helpful error message if
-    # problem originated by this script (the eval command)
-    # but allow STDERR from the executed command to pass through
-    eval "${full_cmd[@]}" 2> >(awk -v prefix="$0" '{ if ($0 ~ "^" prefix) { print "Unknown key or command. See `'$__AppName' list` for known keys" } else { print $0 } }' >&2)
+    # Execute the command directly to preserve TTY context and allow ANSI color codes
+    eval "${full_cmd[@]}"
+    local exit_code=$?
+
+    # If the exit code is 127, it means a "command not found" from the shell
+    # In this case, provide a helpful message where the user can discover available commands
+    if [[ $exit_code -eq 127 ]]; then
+        log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
+    fi
+    
+    return $exit_code
 }
 
 # Function to add or update a key-value pair in an INI file
