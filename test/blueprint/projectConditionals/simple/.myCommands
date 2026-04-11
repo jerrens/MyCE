@@ -8,3 +8,18 @@ SIMPLE_VAR=test_value
     RESULT=matched
 [FI]
 
+
+# Conditional definitions based on container engine
+[IF $CONTAINER_ENGINE == "podman"]
+    WEB_CONTAINER=cns-dev-pod-web
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+    WEB_CONTAINER=cns-dev-web-1
+[FI]
+
+[echo]
+[IF $CONTAINER_ENGINE == "podman"]
+    web=echo "Podman Web container is: ${WEB_CONTAINER}"
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+    web=echo "Docker Web container is: ${WEB_CONTAINER}"
+[FI]
+

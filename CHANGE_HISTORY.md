@@ -8,6 +8,12 @@
 * **BugFix: Update action not working as expected**
   * Changes introduced recently for printing source and description during dry runs modified the runCMD function arguments.
   * Reverted to previous signature and updated how Source location and description are looked up when DRYRUN mode is enabled, reducing unnecessary parameter passing
+* **BugFix: Conditional definitions in sections not working**
+  * Conditional keywords treated as section headers preventing `definition` command from finding keys inside `[section]` blocks
+* **BugFix: Multi-word values corrupted**
+  * Multi-word definition values split incorrectly by switching to newline separator
+* **BugFix: Condition evaluation broken**
+  * Log output corrupting condition results by using global variable instead of command substitution
 
 ## 26.3.28
 

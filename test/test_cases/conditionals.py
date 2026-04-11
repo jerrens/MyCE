@@ -44,7 +44,7 @@ test_cases = {
     "simple echo.web": {
         "cmd": "echo.web",
         "pwd": "projectConditionals/simple",
-        "see": "^Web container is: cns-dev-web-1$",
+        "see": "^Docker Web container is: cns-dev-web-1$",
         "description": "Test [ELSE IF] branch - docker engine should match second condition"
     },
     
@@ -114,6 +114,45 @@ test_cases = {
         "pwd": "projectConditionals/parentOverride/no-pod",
         "see": "^Pod config is: not_set$",
         "description": "Test nested [IF] ELSE branch - USE_POD not set triggers outer [ELSE]"
+    },
+    
+    # =========================================================================
+    # BUG FIX TESTS: Conditionals in Sections & Definition Command
+    # =========================================================================
+    # Issue 1: Conditional keywords ([IF], [ELSE IF], [FI]) were treated as
+    # section headers, causing section context to be lost and definition command
+    # to fail finding keys inside conditional blocks within sections.
+    # Fix: Added checks to skip conditional keywords before section header check.
+    # 
+    # Issue 2: Multi-word definition values with spaces were split incorrectly
+    # when stored/retrieved from conditional blocks.
+    # Fix: Changed separator from space to newline for storing definitions.
+    #
+    # Issue 3: Log output in __evaluate_condition was captured by command
+    # substitution, corrupting true/false result.
+    # Fix: Use global __condition_result variable instead of echo.
+    # 
+    # These tests validate the fixes work correctly.
+    
+    "definition echo.web from simple": {
+        "cmd": "definition echo.web",
+        "pwd": "projectConditionals/simple",
+        "see": "\\[echo\\].*Podman Web container.*\\[echo\\].*Docker Web container",
+        "description": "BUG FIX: definition command should find conditionals inside [section] headers and preserve multi-word values"
+    },
+    
+    "simple multiple conditionals": {
+        "cmd": "definition RESULT",
+        "pwd": "projectConditionals/simple",
+        "see": "RESULT.*matched",
+        "description": "BUG FIX: Multiple [IF] blocks in same file should work - RESULT should be set from first conditional"
+    },
+    
+    "simple echo.web multiword value": {
+        "cmd": "echo.web",
+        "pwd": "projectConditionals/simple",
+        "see": "^Docker Web container is: cns-dev-web-1$",
+        "description": "BUG FIX: Multi-word values in conditionals (e.g. echo commands) should be stored and executed correctly"
     },
     
     # =========================================================================

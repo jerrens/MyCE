@@ -514,10 +514,10 @@ function process_ini_file() {
         elif [[ "$line" =~ ^[[:space:]]*\[ELSE[[:space:]]*IF[[:space:]]+(.+)\]$ ]]; then
             log 2 "Conditional [ELSE IF] block detected: ${BASH_REMATCH[1]}"
             
-            # Store previous block's definitions
+            # Store previous block's definitions using newline as separator
             if [[ "$in_conditional" == "true" ]]; then
                 if [[ -n "$conditional_id" ]]; then
-                    conditionalDefinitions["$conditional_id"]="${conditional_defs[@]}"
+                    IFS=$'\n' eval 'conditionalDefinitions["$conditional_id"]="${conditional_defs[*]}"'
                     log 2 "  Stored block definitions for: $conditional_id"
                     conditionalBlockOrder+=("$conditional_id")
                 fi
@@ -539,9 +539,9 @@ function process_ini_file() {
         elif [[ "$line" =~ ^[[:space:]]*\[ELSE\]$ ]]; then
             log 2 "Conditional [ELSE] block detected"
             
-            # Store previous block's definitions
+            # Store previous block's definitions using newline as separator
             if [[ "$in_conditional" == "true" && -n "$conditional_id" ]]; then
-                conditionalDefinitions["$conditional_id"]="${conditional_defs[@]}"
+                IFS=$'\n' eval 'conditionalDefinitions["$conditional_id"]="${conditional_defs[*]}"'
                 log 2 "  Stored block definitions for: $conditional_id"
                 conditionalBlockOrder+=("$conditional_id")
             fi
@@ -558,9 +558,9 @@ function process_ini_file() {
         elif [[ "$line" =~ ^[[:space:]]*\[FI\]$ ]]; then
             log 2 "Conditional [FI] block terminator detected"
             
-            # Store final block's definitions
+            # Store final block's definitions using newline as separator
             if [[ "$in_conditional" == "true" && -n "$conditional_id" ]]; then
-                conditionalDefinitions["$conditional_id"]="${conditional_defs[@]}"
+                IFS=$'\n' eval 'conditionalDefinitions["$conditional_id"]="${conditional_defs[*]}"'
                 log 2 "  Stored final block definitions for: $conditional_id"
                 conditionalBlockOrder+=("$conditional_id")
             fi
@@ -793,8 +793,9 @@ function evaluate_conditionals() {
                 log 2 "    ELSE block - evaluating as true"
                 condition_result=true
             else
-                # Evaluate the condition
-                condition_result=$(__evaluate_condition "$condition")
+                # Evaluate the condition using global var to avoid capturing log output via $()
+                __evaluate_condition "$condition"
+                condition_result="$__condition_result"
             fi
             
             log 2 "    Condition result: $condition_result"
@@ -802,8 +803,8 @@ function evaluate_conditionals() {
             # If condition is true, merge the definitions and mark chain as matched
             if [[ "$condition_result" == "true" ]]; then
                 log 2 "    Applying conditional definitions..."
-                # Split the definitions by space and process each key=value pair
-                for def in $defs; do
+                # Split the definitions by newline (each definition is on its own line in the string)
+                while IFS= read -r def; do
                     if [[ -n "$def" && "$def" == *"="* ]]; then
                         IFS='=' read -r key value <<< "$def"
                         
@@ -816,7 +817,7 @@ function evaluate_conditionals() {
                         log 3 "      Applying: $key = $value"
                         commands["$key"]="$value"
                     fi
-                done
+                done <<< "$defs"
                 
                 # Mark this chain as matched so subsequent blocks in chain are skipped
                 chain_head_matched["$current_chain_head"]="true"
@@ -830,8 +831,12 @@ function evaluate_conditionals() {
 
 # Helper function to evaluate a single condition expression
 # Supports: VAR==value, VAR!=value, VAR matches regex, VAR (non-empty), !VAR (empty)
+# Result is stored in global __condition_result ("true" or "false") to avoid
+# capturing log output via command substitution $()
+declare -g __condition_result="false"
 function __evaluate_condition() {
     local condition="$1"
+    __condition_result="false"
     log 3 "    __evaluate_condition: '$condition'"
     
     # Strip "ELSE IF: " prefix if present (used to distinguish from IF blocks)
@@ -852,15 +857,15 @@ function __evaluate_condition() {
         if findKey "$var_name"; then
             local var_value="$foundKey_value"
             if [[ -z "$var_value" ]]; then
-                echo "true"
+                __condition_result="true"
                 return 0
             fi
         else
             # Variable doesn't exist, so it's "empty"
-            echo "true"
+            __condition_result="true"
             return 0
         fi
-        echo "false"
+        __condition_result="false"
         return 0
     fi
     
@@ -872,11 +877,11 @@ function __evaluate_condition() {
         if findKey "$var_name"; then
             local var_value="$foundKey_value"
             if [[ -n "$var_value" ]]; then
-                echo "true"
+                __condition_result="true"
                 return 0
             fi
         fi
-        echo "false"
+        __condition_result="false"
         return 0
     fi
     
@@ -889,11 +894,11 @@ function __evaluate_condition() {
         if findKey "$var_name"; then
             local var_value="$foundKey_value"
             if [[ "$var_value" =~ $pattern ]]; then
-                echo "true"
+                __condition_result="true"
                 return 0
             fi
         fi
-        echo "false"
+        __condition_result="false"
         return 0
     fi
     
@@ -906,11 +911,11 @@ function __evaluate_condition() {
         if findKey "$var_name"; then
             local var_value="$foundKey_value"
             if [[ "$var_value" == "$expected_value" ]]; then
-                echo "true"
+                __condition_result="true"
                 return 0
             fi
         fi
-        echo "false"
+        __condition_result="false"
         return 0
     fi
     
@@ -923,20 +928,20 @@ function __evaluate_condition() {
         if findKey "$var_name"; then
             local var_value="$foundKey_value"
             if [[ "$var_value" != "$expected_value" ]]; then
-                echo "true"
+                __condition_result="true"
                 return 0
             fi
         else
             # Variable doesn't exist, so it's != to any value
-            echo "true"
+            __condition_result="true"
             return 0
         fi
-        echo "false"
+        __condition_result="false"
         return 0
     fi
     
     log 0 "WARNING: Could not parse condition: '$condition'"
-    echo "false"
+    __condition_result="false"
     return 0
 }
 
@@ -1122,6 +1127,18 @@ function print_key_entries_in_file() {
 
         # Skip comment lines (but not description comments which we already handled)
         if [[ "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+
+        # Skip conditional control flow statements - must be before section header check
+        # since both use brackets
+        if [[ "$line" =~ ^[[:space:]]*\[IF[[:space:]]+(.+)\]$ ]] || \
+           [[ "$line" =~ ^[[:space:]]*\[ELSE[[:space:]]*IF[[:space:]]+(.+)\]$ ]] || \
+           [[ "$line" =~ ^[[:space:]]*\[ELSE\]$ ]] || \
+           [[ "$line" =~ ^[[:space:]]*\[FI\]$ ]]; then
+            log 2 "    Conditional control statement detected: ${line}"
+            # Reset pending description when entering a conditional
+            pending_description=""
             continue
         fi
 
