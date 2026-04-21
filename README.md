@@ -728,7 +728,7 @@ my list -a prod         # Include variables, showing all commands/variables cont
     ```shell
     # Note: You may need to run with `sudo`
     curl -o /usr/local/sbin/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
-    chmod +x /usr/local/sbin/my
+    chmod a+rx /usr/local/sbin/my
     ```
 
 
@@ -814,13 +814,13 @@ You may need to run `exec bash` after the update for your shell to load the new 
 If you're using a different shell or location for your completion scripts, the manual installation instructions are:
 
 1. Copy the bash-completion/my file from this repo to `/etc/bash_completion.d/my`
-2. Enable the execute flag (`chmod +x`)
+2. Enable the execute flag (`chmod a+rx`)
 
 This can be done with the following commands (these will likely need to be run as `sudo`)
 
 ```bash
 curl -o /etc/bash_completion.d/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/bash-completion/my
-chmod +x /etc/bash_completion.d/my
+chmod a+rx /etc/bash_completion.d/my
 ```
 
 If you run `exec bash` after doing the above, your environment will be reloaded and you can check to see if the command completion is working by entering `my hel<TAB>`.
