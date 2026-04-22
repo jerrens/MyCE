@@ -101,7 +101,7 @@ test_cases = {
     },
 
     # Viewing definitions
-    "definition timestamp": ".myCommands:\d{1,3}\s+timestamp\s+TZ=",
+    "definition timestamp": ".myCommands:\d{1,3}\s+timestamp\s+.*TZ=",
 
     # Special Variables
     "dir.path": "{{TEST_DIR}}",
@@ -117,6 +117,9 @@ test_cases = {
     # Dry Run Special Syntax
     "-d time": "THIS IS A DRYRUN.*CMD: ",
     "time ?": "CMD: ",
+
+    # Definition Preview Special Syntax
+    "time @": ".myCommands:\d{1,3}\s+time",
 
     # Positional arguments at start of command
     "positional.start.echo_first echo": "^hello$",

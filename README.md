@@ -549,9 +549,10 @@ To always disable sourcing the shell rc file, see [MYCE_RUNCOM](#myce_runcom).
 my -c build
 ```
 
-### `?`
+### `?` and `@` Shorthand Suffixes
 
-A shorthand to preview the command that will be expanded, but not actually run the command is available by adding a trailing `?` on the command.
+#### `?` — Dry-Run Preview
+A shorthand to preview the command that will be expanded, but not actually run the command, is available by adding a trailing `?` on the command.
 When a command that ends with `?` is detected, MyCE will interpret this as a request to print the final command to be executed (and will remove the '?' char).
 The output will include the source file location (SRC), any description (DESC) if defined, and the final command (CMD).
 This shorthand syntax makes it easy to question the command that will be executed, then if it is the command you want, you can:
@@ -561,15 +562,32 @@ This shorthand syntax makes it easy to question the command that will be execute
 1. Press ENTER to execute the command
 
 ```shell
->$ my pod.con ?
+> my pod.con ?
 SRC: /home/user/.myCommands:42
 DESC: Execute an interactive bash shell in container
-CMD: podman exec -it my-container bash 
+CMD: podman exec -it my-container bash
 
->$ my pod.con 
-root@my-container:/var/www/html# 
-
+> my pod.con
+root@my-container:/var/www/html#
 ```
+
+#### `@` — Definition Preview
+You can quickly preview where a command is defined by adding a trailing `@` to the command. This acts as a shortcut for the `definition` action, showing the file(s) and line(s) where the command is defined, along with any description.
+
+```shell
+> my pod.con @
+/home/user/.myCommands:42  pod.con    Execute an interactive bash shell in container
+/home/user/project/.myCommands:8  pod.con    Project-specific override (if present)
+```
+
+If the command is not found in any `.myCommands` file, you'll see:
+
+```shell
+> my unknownkey @
+No definition found for 'unknownkey'
+```
+
+This makes it easy to locate or verify the source of a command without running it or typing the full `definition` command.
 
 
 ## How it Works - Command Lookup Process

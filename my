@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.4.11
+__Version=26.4.21
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -54,6 +54,9 @@ USAGE:
                                     This is a special syntax for dry-run mode that can be quickly used to check the command.
                                     Then use the UP arrow to recall the previous command and easily remove the dry-run syntax for execution.
 
+        @                           If the command ends with an '@' character, then definition preview mode will be enabled.
+                                    This shows where the command is defined in the .myCommands files.
+
         help                        Show usage
         version                     Show version number
 
@@ -75,6 +78,7 @@ EOT
     # Print options values if verbose mode
     log 2 "Parsed Options:"
     log 2 "  DryRun:  ${DRYRUN}"
+    log 2 "  Definition Preview: ${DEFINITION_PREVIEW}"
     log 2 "  Verbose: ${VERBOSE}"
     log 2 "  File:    ${MY_CUSTOM_FILE}"
     log 2 "  Column:  ${COLUMN_WIDTH}"
@@ -86,6 +90,7 @@ EOT
 # Default Settings
 VERBOSE=0
 DRYRUN=false
+DEFINITION_PREVIEW=false
 MY_CUSTOM_FILE=${MYCE_FILE_NAME:-.myCommands}
 COLUMN_WIDTH=${MYCE_COLUMN_WIDTH:-120} # If set to 'FULL', then the full terminal width will be used
 
@@ -139,6 +144,17 @@ if [[ "${!#}" == "?" ]]; then
     log 1 "Definition View ending detected - Enabling Dry Run mode"
     log 2 "  Arguments Before: ${*}"
     DRYRUN=true
+    # Remove the last argument
+    set -- "${@:1:$(($#-1))}"
+
+    log 2 "  Arguments After: ${*}"
+fi
+
+# Check for the last arg to be a '@' (special definition preview syntax)
+if [[ "${!#}" == "@" ]]; then
+    log 1 "Definition Preview ending detected - Enabling Definition Preview mode"
+    log 2 "  Arguments Before: ${*}"
+    DEFINITION_PREVIEW=true
     # Remove the last argument
     set -- "${@:1:$(($#-1))}"
 
@@ -1324,6 +1340,13 @@ function find_and_run_cmd() {
     # Now that we have the combined keys, search for the key entered
     if findKey "$cmd"; then
         log 1 "Found value for '$cmd': $foundKey_value"
+        
+        # If definition preview mode is enabled, show the definition and exit
+        if [[ "${DEFINITION_PREVIEW}" == "true" ]]; then
+            get_key_definition "$cmd"
+            return 0
+        fi
+        
         binary_cmd="$foundKey_value"
         local max_loops=15
 
@@ -1456,7 +1479,11 @@ function find_and_run_cmd() {
         runCMD "$binary_cmd" $args
 
     else
-        # If the key was not found in any ${MY_CUSTOM_FILE} files, run the default command
+        # If the key was not found in any ${MY_CUSTOM_FILE} files
+        if [[ "${DEFINITION_PREVIEW}" == "true" ]]; then
+            log 0 "No definition found for '$cmd'"
+            return 1
+        fi
         log 1 "No ${MY_CUSTOM_FILE} file was found in the current directory tree containing '$cmd'\n"
         __current_cmd=""  # Clear for utility command (no metadata available)
         runCMD "$cmd" "$@"

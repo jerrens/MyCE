@@ -7,7 +7,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 # include $HOME/credentials.secret
 
 # Absolute paths are supported
-include ./.credentials.secret
+# include ./.credentials.secret
 
 # .env files can be included for environment variable definitions
 # include .env

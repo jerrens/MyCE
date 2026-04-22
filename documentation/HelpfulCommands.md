@@ -6,7 +6,7 @@
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
 [git]
-dir=echo "${REPO_ROOT}"
+dir=echo "$(git rev-parse --show-toplevel)"
 stash.staged=git stash push --staged
 stash.unstaged=git stash push --keep-index
 stash.unstaged+=git stash push --keep-index --include-untracked
@@ -24,12 +24,14 @@ confirm={ $confirm } && echo "Confirmed" || echo "Rejected"
 ```
 
 ## File
+
 ```ini
 [file]
 backup=echo cp "$1" "$1--$(date +%Y%m%d_%H%M%S).bkp"
 ```
 
 ## Find
+
 ```ini
 [find]
 # Search the current directory and below for a file with the given pattern
@@ -53,6 +55,7 @@ time=TZ="${TIMEZONE:-America/New_York}" date +"%F %X"
 ```
 
 ## Session
+
 ```ini
 # Keeps an SSH session from closing
 hold=echo -ne "Holding the session open since\n  $(my date)\n  Press 'q' to resume...\n\n"; while true; do read -t 1 -n 1 -s keypress; if [[ $keypress == "q" ]]; then echo -e "\r\e[5A\e[J"; break; fi; ec$
@@ -61,6 +64,7 @@ recon=uname -a; whoami; id; my ip;
 ```
 
 ## Services
+
 ```ini
 # Service
 [service]
@@ -75,6 +79,7 @@ find=${service.list} | grep .*$1.*
 ```
 
 ## Metrics/Utilization
+
 ```ini
 [size]
 disk=df -h
@@ -86,6 +91,7 @@ cpu=command -v mpstat &> /dev/null && mpstat -P ALL | lscpu -e
 ```
 
 ## Network
+
 ```ini
 ip=ip -brief a
 
@@ -97,6 +103,7 @@ ping=nc -zv $1 $2 2>&1 | grep "Connect"
 ```
 
 ## Containerization (Podman/Docker)
+
 ```ini
 # These may be defined/overwritten in other directories
 POD_YAML=pod.yaml
@@ -163,6 +170,7 @@ dump=${CONTAINER_ENGINE} run --rm --tty --interactive --volume $(pwd):/mnt/host 
 ```
 
 ## Python
+
 ```ini
 [python]
 venv.create=python -m venv .venv && source .venv/bin/activate

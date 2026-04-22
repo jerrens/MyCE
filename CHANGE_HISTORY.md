@@ -1,6 +1,14 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.4.21
+
+* **NEW FEATURE: Definition Preview Shorthand** - Added support for trailing '@' character to quickly preview command definitions
+  * Commands ending with '@' (e.g., `my command @`) show where the command is defined in .myCommands files
+  * Similar to the existing '?' dry-run syntax but displays definition information instead of command execution
+  * Shows "No definition found" for commands that don't exist in any .myCommands file
+  * Provides quick access to definition information without needing to use the separate `definition` command
+
 ## 26.4.11
 
 * Fix to allow ANSI colors from executed commands to flow through to the current terminal while still providing a helpful error to the user for unknown commands
