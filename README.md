@@ -50,6 +50,35 @@ Conditionals are evaluated after all files are loaded, so child-directory variab
 - **Include Files**: Other files can be included for re-use and/or keeping secret credentials in separate files
 
 
+## Installation
+
+1. **Download the File**:
+    Ensure the script file (`my`) is placed in a directory that is included in your system's $PATH.
+    It is recommended to install at `/usr/local/bin/my`
+    The permissions of the downloaded file will also need to be updated to allow for execution
+
+    ```shell
+    # Note: You may need to run with `sudo`
+    curl -o /usr/local/sbin/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
+    chmod a+rx /usr/local/sbin/my
+    ```
+
+
+1. **Create `.myCommands` files**:
+    Add a `.myCommands` file in the root directories of your projects.
+
+    A sample is available at <https://github.com/jerrens/MyCE/blob/main/.myCommands.example>
+
+> [!TIP]
+> For enhanced usability, consider enabling TAB command completion. See the [Enable TAB Command Completion](#enable-tab-command-completion) section below.
+
+**Optional**: You can add `my` to your `.bashrc` or `.zshrc` if you prefer:
+
+```bash
+alias my='/path/to/my'
+```
+
+
 ## Usage
 
 ### Basic Structure of `.myCommands` File
@@ -715,32 +744,6 @@ You can combine pattern filtering with the formatting options:
 ```bash
 my list -l -d ^docker   # Line-by-line list with descriptions, filtered to commands starting with 'docker'
 my list -a prod         # Include variables, showing all commands/variables containing 'prod'
-```
-
-
-## Installation
-
-1. **Download the File**:
-    Ensure the script file (`my`) is placed in a directory that is included in your system's $PATH.
-    It is recommended to install at `/usr/local/bin/my`
-    The permissions of the downloaded file will also need to be updated to allow for execution
-
-    ```shell
-    # Note: You may need to run with `sudo`
-    curl -o /usr/local/sbin/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/my
-    chmod a+rx /usr/local/sbin/my
-    ```
-
-
-1. **Create `.myCommands` files**:
-    Add a `.myCommands` file in the root directories of your projects.
-
-    A sample is available at <https://github.com/jerrens/MyCE/blob/main/.myCommands.example>
-
-**Optional**: You can add `my` to your `.bashrc` or `.zshrc` if you prefer:
-
-```bash
-alias my='/path/to/my'
 ```
 
 
