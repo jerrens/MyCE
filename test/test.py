@@ -30,37 +30,43 @@ focus_run_test = [
 def load_all_test_cases(test_cases_dir, only_files=None):
     """
     Load test cases from files in test_cases_dir.
-    
+
     Args:
         test_cases_dir: Path to the test_cases directory
         only_files: List of file patterns (without .py extension) to include.
                    If None, all .py files are loaded.
                    Example: ['basic', 'option_parsing'] or ['option_parsing']
+
+    Returns:
+        Tuple of (all_cases dict, source_file dict mapping test key to filename)
     """
     all_cases = {}
+    source_files = {}
 
     # Load and merge test_cases from all files in test/test_cases directory
     if os.path.isdir(test_cases_dir):
         py_files = glob.glob(os.path.join(test_cases_dir, '*.py'))
-        
+
         for file in py_files:
             # Extract base filename without .py extension
             base_name = os.path.splitext(os.path.basename(file))[0]
-            
+
             # If only_files is specified, skip files not in the list
             if only_files is not None and base_name not in only_files:
                 continue
-            
+
             local_ns = {}
             with open(file, 'r') as f:
                 code = f.read()
             exec(code, {}, local_ns)
             if 'test_cases' in local_ns and isinstance(local_ns['test_cases'], dict):
+                for key in local_ns['test_cases']:
+                    source_files[key] = base_name
                 all_cases.update(local_ns['test_cases'])
             else:
                 print(f"Warning: {file} does not define a test_cases dictionary.")
-        
-    return all_cases
+
+    return all_cases, source_files
 
 # Substitute {{TEST_DIR}} in test values with the actual temp directory
 def substitute_testdir_in_testcases(test_cases, testdir):
@@ -121,17 +127,21 @@ def run_tests():
                 shell=True,
                 env=env_list,
             )
-            actual_output = result.stdout.strip() + result.stderr.strip()
+            stdout = result.stdout or ""
+            stderr = result.stderr or ""
+            actual_output = (stdout + ("\n" if stdout and stderr else "") + stderr).strip()
+            alternate_output = (stderr + ("\n" if stderr and stdout else "") + stdout).strip()
 
             expected_pattern = re.compile(expected_output, re.DOTALL)
 
-            if expected_pattern.search(actual_output):
+            if expected_pattern.search(actual_output) or expected_pattern.search(alternate_output):
                 print(f"✓ {command:<60} {description}")
             else:
                 print("\033[1;31m", end='')
                 print(f"✗ {command:<60} {description}")
                 print(f"    Expected: '{expected_output}'")
                 print(f"    Got:      '{actual_output}'")
+                print(f"    Alternate: '{alternate_output}'")
                 print(f"    Command   {test_cmd}")
                 print("\033[0m", end='')
                 failed += 1
@@ -140,6 +150,7 @@ def run_tests():
             failed += 1
         finally:
             os.chdir(orig_cwd)
+
     return failed
 
 if __name__ == "__main__":
@@ -154,6 +165,9 @@ OPTIONS:
   --help, -h                    Show this help message and exit
   --test-file FILE1,FILE2,...   Load only specific test case files (comma-separated)
                                 File names without .py extension
+  --filter REGEX, -f REGEX      Run only tests whose names match the given regex pattern
+                                 Example: -f "^list" to run tests starting with "list"
+  --dryrun, -n                  List tests that would be run without executing them
   --debug, -d                   Print debug information during test execution
 
 EXAMPLES:
@@ -163,23 +177,41 @@ EXAMPLES:
   # Run only basic test cases
   python test.py --test-file basic
 
-  # Run only option_parsing test cases  
+  # Run only option_parsing test cases
   python test.py --test-file option_parsing
 
   # Run multiple specific test files
   python test.py --test-file basic,option_parsing
+
+  # Run tests with names matching a regex pattern
+  python test.py -f "echo"
+  python test.py --filter "^list"
 
   # Run with debug output
   python test.py --debug
 
   # Run specific tests with debug
   python test.py --test-file option_parsing --debug
+
+  # Dry run: list tests without executing
+  python test.py --dryrun
+  python test.py -n
+  python test.py -n -f "^list"
 """
         print(help_text)
         sys.exit(0)
-    
+
     # Parse --test-file flag to only load specific test case files
     only_test_files = None
+    test_filter = None
+    dryrun = False
+
+    # Check for dryrun first - list tests and exit early
+    for flag in ("-n", "--dryrun"):
+        if flag in sys.argv:
+            dryrun = True
+            break
+
     if "--test-file" in sys.argv:
         idx = sys.argv.index("--test-file")
         if idx + 1 < len(sys.argv):
@@ -187,12 +219,51 @@ EXAMPLES:
             files_arg = sys.argv[idx + 1]
             only_test_files = [f.replace('.py', '') for f in files_arg.split(',')]
             print(f"Loading only test cases from: {', '.join(only_test_files)}")
-    
+
+    # Parse -f/--filter flag to filter test cases by regex
+    for flag in ("-f", "--filter"):
+        if flag in sys.argv:
+            idx = sys.argv.index(flag)
+            if idx + 1 < len(sys.argv):
+                test_filter = sys.argv[idx + 1]
+                print(f"Filtering tests by regex: {test_filter}")
+            break
+
     test_cases_dir = os.path.join(os.path.dirname(__file__), 'test_cases')
-    test_cases = load_all_test_cases(test_cases_dir, only_files=only_test_files)
+    test_cases, source_files = load_all_test_cases(test_cases_dir, only_files=only_test_files)
+
+    # Apply regex filter to test case names if specified
+    if test_filter:
+        try:
+            filter_pattern = re.compile(test_filter)
+            test_cases = {k: v for k, v in test_cases.items() if filter_pattern.search(k)}
+            print(f"After filter, running {len(test_cases)} test cases")
+        except re.error as e:
+            print(f"Error: Invalid regex pattern '{test_filter}': {e}")
+            sys.exit(1)
 
     # Print the number of test cases loaded for verification
     print(f"Number of test cases: {len(test_cases)}")
+
+    # Dryrun mode: just list tests without running
+    if dryrun:
+        # Calculate column widths for alignment
+        max_key_len = max(len(k) for k in test_cases.keys()) if test_cases else 0
+        max_src_len = max(len(v) for v in source_files.values()) if source_files else 0
+        
+        print("\n=== Tests that would be run ===\n")
+        print(f"{'Test Name':<{max_key_len}}    {'Group':<{max_src_len}}    Description")
+        print("-" * (max_key_len + max_src_len + 50))
+        for key, val in test_cases.items():
+            src_file = source_files.get(key, "unknown")
+            if isinstance(val, dict):
+                desc = val.get("description", "")
+            else:
+                desc = ""
+            print(f"{key:<{max_key_len}}    {src_file:<{max_src_len}}    {desc}")
+        print(f"\nTotal: {len(test_cases)} tests")
+        sys.exit(0)
+
     # print("Test case keys:")
     # [print(f"  {key}") for key in test_cases.keys()]
     # sys.exit(0)
@@ -242,5 +313,14 @@ EXAMPLES:
         print(f"Cleaned up test directory: {test_dir}")
     except Exception as e:
         print(f"Warning: Failed to clean up test directory: {e}")
+
+    # Print test summary
+    total_tests = len(test_cases)
+    passed_tests = total_tests - failed
+    print(f"\n{'='*40}")
+    print(f"Test Summary: {passed_tests}/{total_tests} passed")
+    if failed > 0:
+        print(f"Failed: {failed}")
+    print(f"{'='*40}")
 
     sys.exit(failed)

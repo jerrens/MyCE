@@ -1,5 +1,5 @@
 #!/bin/bash
-# spell-checker:words dzdo sdiff MyCE mkfifo
+# spell-checker:words dzdo sdiff MyCE mkfifo stty fflush
 
 # Save original IFS at script start
 __MYCE_ORIGINAL_IFS="$IFS"
@@ -8,7 +8,8 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.4.21
+__Version=26.4.24
+__ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
@@ -16,7 +17,7 @@ __origArgs=$* # Capture all of the original arguments
 
 # Detect the shell if possible
 if [[ $(type -t ps) == "file" ]]; then
-    __Shell="$((ps -p $$ -f -o "command=" || echo $SHELL) | basename $(cut -d' ' -f1) 2>/dev/null)"
+    __Shell="$( (ps -p $$ -f -o "command=" || echo "$SHELL") | basename "$(cut -d' ' -f1)" 2>/dev/null )"
 fi
 __Shell="${__Shell:-false}"
 
@@ -113,6 +114,7 @@ fi
 
 
 # Prints log message to the terminal
+# Level 0 are considered "important" messages and will be printed to stdout, while levels 1 and above are considered "debug" messages and will be printed to stderr
 #  <int> lvl - Print Level: Only print this message if the VERBOSE level is greater than or equal to this
 #  <string> msg - Message to print
 function log() {
@@ -120,10 +122,13 @@ function log() {
     local msg=$2
 
     if (( lvl <= VERBOSE )); then
-        echo -e "$msg"
+        if (( lvl == 0 )); then
+            echo -e "$msg"
+        else
+            echo -e "$msg" >&2
+        fi
     fi
 }
-
 
 while getopts 'dvc' option; do
     # echo "Option: ${option}"
@@ -196,9 +201,7 @@ function runCMD() {
     fi
 
     # For normal execution, build the full command
-    local -a full_cmd=( "$cmd_string" "$@" )
-
-    log 3 "Executing: ${full_cmd[*]}"
+    log 3 "Executing: $cmd_string $*"
 
     # Before executing the command, run the shell rc file to support aliases and other configurations
     if [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ]; then
@@ -214,7 +217,12 @@ function runCMD() {
     fi
 
     # Execute the command directly to preserve TTY context and allow ANSI color codes
-    eval "${full_cmd[@]}"
+    # Filter stderr: suppress the shell's own "command not found" lines (those starting with this
+    # script's path), while passing everything else through live.
+    # NOTE: eval is intentional here — needed to expand aliases after sourcing the shell rc file.
+    eval "$cmd_string" "$@" 2> >(
+        awk -v exe="$__ExePath" -v verbose="$VERBOSE" 'index($0, exe) == 1 && /: command not found$/ && verbose < 1 { next } { print > "/dev/stderr"; fflush() }'
+    )
     local exit_code=$?
 
     # If the exit code is 127, it means a "command not found" from the shell
@@ -415,8 +423,6 @@ declare -A conditionalConditions
 declare -A conditionalDefinitions
 # Array to track the order of conditional blocks for processing
 declare -a conditionalBlockOrder
-# Current nesting level for IF blocks (to handle nesting)
-declare -i conditionalNestingLevel=0
 
 function process_ini_file() {
     log 1 "Loading file: $1"
@@ -434,7 +440,6 @@ function process_ini_file() {
     # Variables for tracking conditional blocks
     local in_conditional=false
     local conditional_id=""
-    local conditional_line_num=0
     local conditional_defs=()
     local conditional_stack=()  # Stack for nested conditionals
     
@@ -524,7 +529,6 @@ function process_ini_file() {
             
             in_conditional=true
             conditional_id="${filepath}:${lineNumber}"
-            conditional_line_num=$lineNumber
             conditional_defs=()
             # Extract and store the condition (everything between [IF and ])
             local condition_expr="${BASH_REMATCH[1]}"
@@ -549,7 +553,6 @@ function process_ini_file() {
             # Start new ELSE IF block
             in_conditional=true
             conditional_id="${filepath}:${lineNumber}"
-            conditional_line_num=$lineNumber
             conditional_defs=()
             local condition_expr="${BASH_REMATCH[1]}"
             condition_expr="${condition_expr#[[:space:]]}"
@@ -572,7 +575,6 @@ function process_ini_file() {
             # Start ELSE block (special condition: always true if reached)
             in_conditional=true
             conditional_id="${filepath}:${lineNumber}"
-            conditional_line_num=$lineNumber
             conditional_defs=()
             conditionalConditions["$conditional_id"]="ELSE"  # Special marker
             log 2 "  ELSE block started"
@@ -997,7 +999,7 @@ function set_key_value() {
     set_ini_value "${MY_CUSTOM_FILE}" "$key" "$value"
 
     log 3 "Updated ${MY_CUSTOM_FILE} content:"
-    log 3 "$(cat ${MY_CUSTOM_FILE})"
+    log 3 "$(cat "${MY_CUSTOM_FILE}" )"
     log 3
 }
 
@@ -1052,7 +1054,7 @@ function list_keys() {
         fi
 
         local words
-        words=$(printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort)
+        words=$(printf "%s\n" "${!commands[@]}" | eval "${grepCMD}" | sort)
 
         # Apply a filter if a partial word was given (for autocomplete)
         if [[ -n "$filter_pattern" ]]; then
@@ -1102,11 +1104,11 @@ function list_keys() {
 
                     outputCMD="column ${COLUMN_ARG}"
                 else
-                    outputCMD='sed "s/^/${indent}/"'
+                    outputCMD="sed 's/^/${indent}/'"
                 fi
 
                 log 0 "The following commands are available:"
-                echo "$words" | eval ${outputCMD}
+                echo "$words" | eval "${outputCMD}"
             fi
 
             # printf "%s\n" "${!commands[@]}" | eval ${grepCMD} | sort | eval ${outputCMD}
@@ -1231,7 +1233,7 @@ function print_key_entries_in_file() {
         for line in "${foundFileDefs[@]}"; do
             # Replace any line wrap chars with an escaped version for the print
             log 1 "|${line//\\n/\\\\n}"
-        done | eval ${columnCMD}
+        done | eval "${columnCMD}"
         log 1 ""
     fi
 }
@@ -1315,7 +1317,7 @@ function get_key_definition() {
         for line in "${foundDefs[@]}"; do
             # Replace any line wrap chars with an escaped version for the print
             log 0 "${line//\\n/\\\\n}"
-        done | eval ${columnCMD}
+        done | eval "${columnCMD}"
     fi
 
     log 1 "\n\e[3m** NOTE: If multiple definitions were found, the last definition shown is used\e[0m\n"
@@ -1476,7 +1478,7 @@ function find_and_run_cmd() {
         if [ $# -gt 0 ]; then
             printf -v args '%q ' "$@"
         fi
-        runCMD "$binary_cmd" $args
+        runCMD "$binary_cmd" "$args"
 
     else
         # If the key was not found in any ${MY_CUSTOM_FILE} files
@@ -1501,7 +1503,7 @@ function download_latest_release() {
 
     case ${tag} in
         latest|release|released )
-            tag="$(curl -Ls -o /dev/null -w '%{url_effective}' ${repo}/releases/latest | awk -F'/' '{print $NF}')"
+            tag="$(curl -Ls -o /dev/null -w '%{url_effective}' "${repo}/releases/latest" | awk -F'/' '{print $NF}')"
             log 1 "Found Latest Release Tag: ${tag}"
             local github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
             archive_root="MyCE-${tag#v}"
@@ -1567,7 +1569,7 @@ function update_script() {
     # Expected location is typically: /usr/local/bin/my
     exe_basename=$(basename $0 2> /dev/null) # Get the filename of the exe running
     # Handle if not installed in a PATH location (running locally), by referencing the executing script
-    install_path=$(which ${exe_basename} 2> /dev/null)
+    install_path=$( which "${exe_basename}" 2> /dev/null )
     install_path=${install_path:-$0}
 
     local repo=https://github.com/jerrens/MyCE

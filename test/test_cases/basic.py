@@ -128,4 +128,11 @@ test_cases = {
     # Variable replacement at start and mid-command
     "variable.replacement.test_var_sub": "^result_echo_end$",
     "variable.replacement.test_var_start": "^is here$",
+
+    # Test list with a pattern that matches no keys (should print 'Nothing Found')
+    "list xyznonexistent123": {
+        "cmd": "list xyznonexistent123",
+        "see": "No commands found matching the filter",
+        "description": "list with non-matching pattern should show 'Nothing Found'"
+    },
 }

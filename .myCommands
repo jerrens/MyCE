@@ -1,3 +1,5 @@
+# spell-checker:ignore dzdo
+
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
 # Relative paths are supported
@@ -17,3 +19,5 @@ my=${REPO_ROOT}/my
 install.dev=dzdo cp "${REPO_ROOT}/my" "/usr/local/bin/my"; dzdo chown root: "/usr/local/bin/my"
 
 test=cd ${REPO_ROOT}/test && python3 test.py
+
+smoke=echo -e "Hello \e[0;31m${1:-World}\e[0m"

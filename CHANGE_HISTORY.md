@@ -1,6 +1,14 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.4.24
+
+* **Improved Error Handling** - Enhanced "command not found" error reporting by filtering stderr to show only relevant errors while suppressing script-sourced shell errors
+* **Logging Improvements** - Fixed logging to properly direct verbose output to stderr while keeping standard output clean for piping and command substitution
+* **Shell Quoting & Escaping** - Fixed variable expansion issues throughout the script with proper quoting for commands, paths, and variable references
+* **Code Cleanup** - Removed unused variables and commented-out code from conditional block handling
+* **Test Enhancements** - Improved `test.py` output handling to properly combine and match stdout/stderr in any order, with added test summary statistics
+
 ## 26.4.21
 
 * **NEW FEATURE: Definition Preview Shorthand** - Added support for trailing '@' character to quickly preview command definitions
@@ -12,7 +20,6 @@
 ## 26.4.11
 
 * Fix to allow ANSI colors from executed commands to flow through to the current terminal while still providing a helpful error to the user for unknown commands
-
 
 ## 26.3.30
 
