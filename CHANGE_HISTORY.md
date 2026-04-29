@@ -1,6 +1,20 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.4.29
+
+* **ZSH Completion Support** - Added zsh autocompletion via new `auto-complete/_my.zsh` file
+  * Installs to `/usr/share/zsh/site-functions/_my` when running `my update` from zsh
+  * Detects shell type at runtime and installs appropriate completion file
+* **Completion Directory Renamed** - Renamed `bash-completion/` to `auto-complete/` for clarity
+  * `my.bash` → bash completion file
+  * `_my.zsh` → zsh completion file
+* **Update Script Improvements** - Refactored `update_script` function to detect shell type
+  * Checks `$ZSH_VERSION` and `$BASH_VERSION` to determine shell
+  * Single code path for installation with shell-specific paths defined inline
+* **Documentation Updates** - Updated README.md and AGENTS.md to reflect new completion file locations
+* **New Command** - Added `zsh` command to launch zsh container with MyCE and completion pre-configured
+
 ## 26.4.24
 
 * **Improved Error Handling** - Enhanced "command not found" error reporting by filtering stderr to show only relevant errors while suppressing script-sourced shell errors

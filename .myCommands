@@ -21,3 +21,14 @@ install.dev=dzdo cp "${REPO_ROOT}/my" "/usr/local/bin/my"; dzdo chown root: "/us
 test=cd ${REPO_ROOT}/test && python3 test.py
 
 smoke=echo -e "Hello \e[0;31m${1:-World}\e[0m"
+
+# Creates a ZSH terminal with MyCE script loaded
+# description: OhMyZSH + MyCE - 'latest' image used by default. Add a tag as an argument to specify a different version (e.g. 'my zsh 5.8')
+zsh=${CONTAINER_ENGINE} run -it --rm \
+    -e ZSH_DISABLE_COMPFIX=true \
+    --volume ${PWD}:/mnt/host \
+    --volume ./my:/usr/local/bin/my \
+    --volume ~/.myCommands:/root/.myCommands \
+    --volume __DIRECTORY__/auto-complete/_my.zsh:/root/.oh-my-zsh/custom/functions/_my \
+    --workdir /mnt/host \
+    docker.io/ohmyzsh/zsh:${1:-latest} zsh
