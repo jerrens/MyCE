@@ -17,13 +17,21 @@ __origArgs=$* # Capture all of the original arguments
 
 # Detect the shell if possible
 if [[ $(type -t ps) == "file" ]]; then
-    __Shell="$( (ps -p $$ -f -o "command=" || echo "$SHELL") | basename "$(cut -d' ' -f1)" 2>/dev/null )"
+    __Shell="$( (ps -p "$PPID" -o comm= || echo "$SHELL") | basename "$(cut -d' ' -f1)" 2>/dev/null )"
 fi
 __Shell="${__Shell:-false}"
 
 
 function print_usage() {
     includeAppInfo=${1}
+
+    local shorthand_dryrun=""
+    if [[ $__Shell == "zsh" ]]; then
+        shorthand_dryrun="\?"
+    else # Assume BASH
+        shorthand_dryrun="? "
+    fi
+    
     cat <<EOT
 
 This script will search the current directory tree for a file named '${MY_CUSTOM_FILE}', containing
@@ -51,7 +59,7 @@ USAGE:
         update [diff]               Update the script with the latest version.
                                     If 'diff' is given, then show the changes
 
-        ?                           If the command ends with a '?' character, then dry-run mode will be enabled.
+        ${shorthand_dryrun}                          If the command ends with a '${shorthand_dryrun%%[[:space:]]}' character, then dry-run mode will be enabled.
                                     This is a special syntax for dry-run mode that can be quickly used to check the command.
                                     Then use the UP arrow to recall the previous command and easily remove the dry-run syntax for execution.
 
@@ -1640,13 +1648,11 @@ function update_script() {
 
     # Determine installation auto-completion based on shell type
     local shell_type src_file dest_file completion_dir
-    if [[ -n "$ZSH_VERSION" ]]; then
-        shell_type="zsh"
+    if [[ $__Shell == "zsh" ]]; then
         src_file="/tmp/${archive_root}/auto-complete/_my.zsh"
         dest_file="/usr/share/zsh/site-functions/_my"
         completion_dir="/usr/share/zsh/site-functions"
-    elif [[ -n "$BASH_VERSION" ]]; then
-        shell_type="bash"
+    else # Assume BASH
         src_file="/tmp/${archive_root}/auto-complete/my.bash"
         dest_file="/etc/bash_completion.d/my.bash_completion"
         completion_dir="/etc/bash_completion.d"
@@ -1654,7 +1660,7 @@ function update_script() {
 
     # Now that we know the shell type, move the appropriate completion file and set permissions
     if [[ -n "$src_file" && -n "$dest_file" && -d "${completion_dir}" ]]; then
-        log 1 "Updating ${shell_type} completion file at ${completion_dir}..."
+        log 1 "Updating ${__Shell} completion file at ${completion_dir}..."
         runCMD mv --force "$src_file" "$dest_file"
         runCMD chmod 644 "$dest_file"
     fi
