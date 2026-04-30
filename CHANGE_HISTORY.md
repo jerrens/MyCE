@@ -8,6 +8,7 @@
   * Triple Single quote Heredoc style tweaked to maintain all whitespace
 * Updated line continuation form to trim whitespace
 * Fixed but where line count reference does not account for multiline values
+* Changed zsh completion script path to be stored in `/usr/local/share/zsh/site-functions/_my`
 
 ## 26.4.29
 

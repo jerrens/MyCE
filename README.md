@@ -841,9 +841,11 @@ The command executed changes based on the directory you are in, as it reads the 
 
 ## Enable TAB Command Completion
 
+### Bash
+
 The bash terminal offers a simple command completion feature using the TAB key while entering commands.
 To take advantage of this feature with MyCE, if you already have the folder `/etc/bash_completion.d` you can run `my update` to download the latest release and install the auto-completion script.
-You may need to run `exec bash` after the update for your shell to load the new feature
+You will need to run `exec bash` after the update for your shell to load the new feature.
 If you're using a different shell or location for your completion scripts, the manual installation instructions are:
 
 1. Copy the `auto-complete/my.bash` file from this repo to `/etc/bash_completion.d/my.bash_completion`
@@ -868,6 +870,28 @@ to load the specific file, or to load all files in the `/etc/bash_completion.d` 
 
 After adding one of those lines to `~/.bashrc`, save, then run `exec bash` and try again.
 
+### ZSH / Oh My ZSH
+
+To add auto completion support for MyCE in ZSH, if you already have the folder `/usr/local/share/zsh/site-functions` you can run `my update` to download the latest release and install the auto-completion script.
+You will need to run `exec zsh` after the update has completed for your shell to load the new completion script.
+To manually install the completion script, do the following:
+
+1. Copy the `auto-complete/_my.zsh` file from this repo to `/usr/local/share/zsh/site-functions/_my`
+2. Enable the execute flaf (`chmod a+rx`)
+
+This can be done with the following commands (these will likely need to be run as `sudo`)
+
+```shell
+curl -o /usr/local/share/zsh/site-functions/_my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/auto-complete/_my.zsh
+chmod a+rx /usr/local/share/zsh/site-functions/_my
+```
+
+> [!NOTE]
+> The `_my` script needs to be stored in a folder that is listed in `$fpath` or you need to add your custom folder to that variable.
+
+Once the completion file is in place, run `exec zsh` to reload your environment.
+You can check to see if the command completion is working by entering `my hel<TAB>`.
+If working, it should auto complete to `my help`.
 
 ## Guide
 
