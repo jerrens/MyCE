@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.4.29
+__Version=26.4.30
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -453,33 +453,96 @@ function process_ini_file() {
     
     while IFS= read -r line <&3 || [[ -n "$line" ]]; do
         ((lineNumber++))
-        # If the line ends with a continuation character '\', then read the next line and append it
-        while [[ "$line" =~ \\$ ]]; do
-            # Remove the trailing backslash and append the next line
-            line="${line%\\}"
-            if IFS= read -r nextLine <&3; then
-                line+="$nextLine"
-            else
-                break
-            fi
-        done
 
-        # Heredoc: If the line ends with ''', then read until the next ''' and append it
-        if [[ "$line" =~ \'\'\'$ ]]; then
-            log 2 "Found Heredoc starting at line: $line"
-            line="${line%%\'\'\'}"
+        # If the line ends with a continuation character '\', then read the next line and append it
+        if [[ "$line" =~ \\[[:space:]]*$ ]]; then
+            # Remove the trailing backslash and any whitespace, then append the next line
+            line="${line%\\*}"
+            line="${line#"${line%%[![:space:]]*}"}"
+            log 2 "Line continuation detected at line $lineNumber: $line"
+
+            {
+                while IFS= read -r nextLine || [ -n "$nextLine" ]; do
+                    ((lineNumber++)) # Keep incrementing the line during this loop
+
+                    # Ignore comment lines starting with #
+                    if [[ "$nextLine" =~ ^[[:space:]]*# ]]; then
+                        log 3 "  Ignoring comment line in line continuation: $nextLine"
+                    else 
+                        nextLine="${nextLine%"${nextLine##*[![:space:]]}"}" # Trim trailing whitespace
+                        nextLine="${nextLine#"${nextLine%%[![:space:]]*}"}" # Trim leading whitespace
+                        log 3 "  Appending line: $nextLine"
+                        trimmedNextLine="${nextLine%%\\}"
+                        line+="$trimmedNextLine"
+                    fi
+                    
+                    # If the line did not end with a continuation character, then we're finished
+                    if [[ ! "$nextLine" =~ \\[[:space:]]*$ ]]; then
+                        log 2 "Found last line of continuation at line $lineNumber: $nextLine"
+                        break
+                    fi
+                done
+            } <&3
+        fi
+
+        # Heredoc with newline: If the line ends with ''', then read until the next ''' and append it, preserving line wraps and whitespace
+        if [[ "$line" =~ \'\'\'[[:space:]]*$ ]]; then
+            log 2 "Found single quoted Heredoc starting at line: $line"
+            line="${line%\'\'\'*}" # Remove the 3xSQ, but keep any trailing whitespace
             log 3 "Updated line: $line"
 
             {
                 while IFS= read -r nextLine || [ -n "$nextLine" ]; do
-                    if [[ "$nextLine" =~ \'\'\'$ ]]; then
-                        log 2 "----- Found Heredoc end: ------"
+                    ((lineNumber++)) # Keep incrementing the line during this loop
+
+                    if [[ "$nextLine" =~ \'\'\'[[:space:]]*$ ]]; then
+                        log 2 "----- Found Heredoc SQ end: ------"
                         nextLine="${nextLine%%\'\'\'}"
+                        # nextLine="${nextLine%"${nextLine##*[![:space:]]}"}"
                         line+="${nextLine}\n"
                         break
                     else
                         log 3 "  Appending line: $nextLine"
                         line+="${nextLine}\n"
+                        log 3 "    Updated line: $line"
+                    fi
+                done
+            } <&3
+
+            # Remove trailing new line char
+            line="${line%\\n\\n}"
+            line="${line%\\n}"
+        fi
+
+        # Heredoc without newline: If the line ends with """, then read until the next """ and append it into a single line
+        if [[ "$line" =~ \"\"\"[[:space:]]*$ ]]; then
+            log 2 "Found double quoted Heredoc starting at line: $line"
+            line="${line%\"\"\"*}"
+            line="${line%"${line##*[![:space:]]}"}"
+            line="${line#"${line%%[![:space:]]*}"}"
+            log 3 "Updated line: $line"
+
+            {
+                while IFS= read -r nextLine || [ -n "$nextLine" ]; do
+                    ((lineNumber++)) # Keep incrementing the line during this loop
+
+                    nextLine="${nextLine%"${nextLine##*[![:space:]]}"}" # Trim trailing whitespace
+                    nextLine="${nextLine#"${nextLine%%[![:space:]]*}"}" # Trim leading whitespace
+
+                    # Ignore comment lines starting with #
+                    if [[ "$nextLine" =~ ^[[:space:]]*# ]]; then
+                        log 3 "  Ignoring comment line in double quoted heredoc: $nextLine"
+                        continue
+                    fi
+
+                    if [[ "$nextLine" =~ \"\"\"$ ]]; then
+                        log 2 "----- Found Heredoc DQ end: ------"
+                        nextLine=" ${nextLine%%\"\"\"}"
+                        line+=" ${nextLine}"
+                        break
+                    else
+                        log 3 "  Appending line: $nextLine"
+                        line+=" ${nextLine}"
                         log 3 "    Updated line: $line"
                     fi
                 done

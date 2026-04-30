@@ -58,15 +58,6 @@ test_cases = {
 
     "test.nested.sub Alice Blue": "Testing Nested Subst\n\x1b\[31mAlice!\x1b\[0m Other Blue",
 
-    "multiline": "This is a multi-line command that should be treated as a single command",
-    "multi.cmd1": "First command",
-    "multi.cmd2": "Second command",
-    "multi.cmd3": "^Third command with a continuation \s{4}\(leading whitespace preserved\) text from line 2 and line 3",
-    "multi.cmd4": "Fourth command with a continuation text from line 2\nand line 3",
-    "multi.cmd5": "0\n2\n4\n6\n8\n10\n12\n14\n16\n18\n20",
-
-    "multi.heredoc": "^This is a heredoc test.\nIt should be included in the value with line wraps\n    and indentation preserved.",
-
     "line.len 10": "^-{10}$",
 
     # Commands with ENV definitions

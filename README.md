@@ -109,8 +109,8 @@ If you want to include `.myCommands` in source control, it is recommended that y
 
 #### Multi-line Commands
 
-Values may span multiple lines by ending the line with a `\` char or using the `'''` heredoc style.
-When using either of these continuation forms, any whitespace at the beginning of the consecutive line(s) will be preserved.
+Values may span multiple lines by ending the line with a `\` char or using the `'''` or `"""` heredoc style.
+Note: Whitespace is only preserved when using the `'''` syntax.
 
 #### Optional Descriptions
 
@@ -307,13 +307,19 @@ echo=echo "Custom Prefix: "
 npm="$LAST_CONTAINER npm"
 
 continuation=echo "This is a multi-line command \
-that should be treated as a single command"
+that should be treated as a single line command"
 
-heredoc=echo -e '''
+heredoc-sq=echo -e '''
 "This is a heredoc multiline value.
 It will be included in the value with line wraps
     and indentation preserved."
 '''
+
+heredoc-dq=echo -e """
+"This is a heredoc multiline value.
+It will be included in the value with line wraps
+    and indentation REMOVED."
+"""
 
 deploy=${WORKSPACE_ROOT}/vendor/bin/envoy run deploy
 

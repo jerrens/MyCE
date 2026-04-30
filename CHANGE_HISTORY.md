@@ -1,6 +1,14 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.4.30
+
+* Added support for Heredoc style using double quotes
+  * This form removes whitespace and results in a single line
+  * Triple Single quote Heredoc style tweaked to maintain all whitespace
+* Updated line continuation form to trim whitespace
+* Fixed but where line count reference does not account for multiline values
+
 ## 26.4.29
 
 * **ZSH Completion Support** - Added zsh autocompletion via new `auto-complete/_my.zsh` file

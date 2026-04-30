@@ -22,7 +22,7 @@ cmd1=echo "First command"
 cmd2=echo "Second \
 command"
 cmd3=echo "Third command with a continuation \
-    (leading whitespace preserved) text from line 2" \
+    (leading whitespace removed) text from line 2" \
     "and line 3"
 cmd4=echo "Fourth command with a continuation" \
     "text from line 2" \
@@ -31,11 +31,33 @@ cmd5=seq \
     0 \
     2 \
     20
-heredoc=echo -e '''
-"This is a heredoc test.
+cmd6=echo "Fifth command with a continuation" \
+    # && echo "Comment removed" \
+    && echo "and a comment line in between that should be ignored"
+
+# Has trailing whitespace after 3xSQ, and whitespace at end of first line (to be preserved in value)
+heredoc=echo -e '''  
+"This is a heredoc test.  
 It should be included in the value with line wraps
     and indentation preserved."
 '''
+
+# Has trailing whitespace after 3xDQ, and whitespace at end of first line (to be trimmed in value)
+heredoc-double=echo -e """  
+"This is a heredoc test.  
+It should be included in the value without line wraps
+    nor indentation preserved."
+"""
+
+
+# Double quoted heredoc should support comment lines starting with #, which should be ignored and not included in the value
+heredoc-comment=echo -e """
+"This is a heredoc test.
+# Comment line that should be ignored
+    # Another comment line that should be ignored
+It should not include lines starting with #"
+"""
+
 
 
 [line]
