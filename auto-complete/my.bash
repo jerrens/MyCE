@@ -3,7 +3,7 @@
 
 # Place this file at: /etc/bash_completion.d/my
 # NOTE: Run the following commands with sudo level:
-# curl -o /etc/bash_completion.d/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/bash-completion/my
+# curl -o /etc/bash_completion.d/my.bash_completion https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/auto-complete/my.bash
 # chmod +x /etc/bash_completion.d/my
 # exec bash
 # 
@@ -48,7 +48,7 @@ _my_autocomplete() {
                 return 0;;
 
             list)
-                COMPREPLY=( $(compgen -W "-l -a" -- "${cur}") )
+                COMPREPLY=( $(compgen -W "-l -a -d" -- "${cur}") )
                 return 0;;
 
             #set)

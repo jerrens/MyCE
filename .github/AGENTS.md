@@ -176,7 +176,7 @@ CONTAINER_ENGINE=docker  # Override → affects conditional above
 - **Author:** Jerren Saunders
 - **Test Suite:** Located in `test/` directory with test cases for various features
 - **Documentation:** README.md with comprehensive feature guide
-- **Bash Completion:** `bash-completion/my` for shell completions
+- **Bash Completion:** `auto-complete/my.bash` for bash completions and `auto-complete/_my.zsh` for zsh completions
 
 ## Agent Guidelines
 
@@ -257,4 +257,5 @@ When working on MyCE tasks:
 - **README.md** — Full feature documentation and examples
 - **CHANGE_HISTORY.md** — Version history and changelog
 - **test/** — Test suite with real-world examples
-- **bash-completion/my** — Shell completion definitions
+- **auto-complete/my.bash** — Bash completion definitions
+- **auto-complete/_my.zsh** — ZSH completion definitions

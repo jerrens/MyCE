@@ -377,7 +377,7 @@ USAGE:
         update [diff]               Update the script with the latest version.
                                     If 'diff' is given, then show the changes
 
-        ?                           If the command ends with a '?' character, then dry-run mode will be enabled.
+        \?                          If the command ends with a '\?' character, then dry-run mode will be enabled.
                                     This is a special syntax for dry-run mode that can be quickly used to check the command.
                                     Then use the UP arrow to recall the previous command and easily remove the dry-run syntax for execution.
 
@@ -549,13 +549,18 @@ To always disable sourcing the shell rc file, see [MYCE_RUNCOM](#myce_runcom).
 my -c build
 ```
 
-### `?` and `@` Shorthand Suffixes
+### Shorthand Suffixes
 
-#### `?` — Dry-Run Preview
+#### `?` | `\?` — Dry-Run Preview
+
 A shorthand to preview the command that will be expanded, but not actually run the command, is available by adding a trailing `?` on the command.
 When a command that ends with `?` is detected, MyCE will interpret this as a request to print the final command to be executed (and will remove the '?' char).
 The output will include the source file location (SRC), any description (DESC) if defined, and the final command (CMD).
 This shorthand syntax makes it easy to question the command that will be executed, then if it is the command you want, you can:
+
+> [!IMPORTANT]
+> ZSH (including OhMyZSH) has native glob expansion that treats `?` as a single-character wildcard.
+> To use the dry-run suffix in ZSH, you must use an escaped `\?` suffix when using this shell: `my alias \?`
 
 1. Press UP-ARROW to recall the previous command from history
 1. Press BACKSPACE to remove the '?' char
@@ -572,6 +577,7 @@ root@my-container:/var/www/html#
 ```
 
 #### `@` — Definition Preview
+
 You can quickly preview where a command is defined by adding a trailing `@` to the command. This acts as a shortcut for the `definition` action, showing the file(s) and line(s) where the command is defined, along with any description.
 
 ```shell
@@ -834,13 +840,13 @@ To take advantage of this feature with MyCE, if you already have the folder `/et
 You may need to run `exec bash` after the update for your shell to load the new feature
 If you're using a different shell or location for your completion scripts, the manual installation instructions are:
 
-1. Copy the bash-completion/my file from this repo to `/etc/bash_completion.d/my`
+1. Copy the `auto-complete/my.bash` file from this repo to `/etc/bash_completion.d/my.bash_completion`
 2. Enable the execute flag (`chmod a+rx`)
 
 This can be done with the following commands (these will likely need to be run as `sudo`)
 
 ```bash
-curl -o /etc/bash_completion.d/my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/bash-completion/my
+curl -o /etc/bash_completion.d/my.bash_completion https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/auto-complete/my.bash
 chmod a+rx /etc/bash_completion.d/my
 ```
 
