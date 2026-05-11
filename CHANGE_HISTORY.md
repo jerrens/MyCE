@@ -1,6 +1,11 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.5.11
+
+* BugFix: Output of dryrun does not preserve escaped characters and ANSI control
+* Updated test.py to handle `cwd` as an argument to run_test function call and set in subprocess instead of chdir
+
 ## 26.4.30
 
 * Added support for Heredoc style using double quotes

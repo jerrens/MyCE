@@ -83,7 +83,7 @@ if len(focus_run_test) > 0:
     test_cases = {key: test_cases[key] for key in focus_run_test}
 
 
-def run_tests():
+def run_tests(test_dir):
     failed = 0
     orig_cwd = os.getcwd()
     for command, val in test_cases.items():
@@ -94,14 +94,14 @@ def run_tests():
                 env_list = val.get("env", None)
                 expected_output = val.get("see", "Missing 'see' property in test")
                 description = val.get("description", "")
-                pwd = val.get("pwd", orig_cwd)
+                pwd = val.get("pwd", test_dir)  # Default to test_dir instead of orig_cwd
             else:
                 cmd_prefix = ""
                 cmd_suffix = command
                 env_list = None
                 expected_output = val
                 description = ""
-                pwd = orig_cwd
+                pwd = test_dir  # Default to test_dir
 
             # Update any special character references in the expected output (e.g. __exe__)
             expected_output = expected_output.replace("__exe__", exe)
@@ -112,7 +112,7 @@ def run_tests():
                 continue
 
             test_cwd = os.path.join(orig_cwd, pwd) if not os.path.isabs(pwd) else pwd
-            os.chdir(test_cwd)
+            # Don't change directory, use cwd in subprocess.run
 
             test_cmd = f"{cmd_prefix} {exe} {cmd_suffix}"
 
@@ -126,6 +126,7 @@ def run_tests():
                 timeout=5,
                 shell=True,
                 env=env_list,
+                cwd=test_cwd,  # Run in test_cwd
             )
             stdout = result.stdout or ""
             stderr = result.stderr or ""
@@ -148,8 +149,7 @@ def run_tests():
         except Exception as e:
             print(f"✗ {command} - Error: {e}")
             failed += 1
-        finally:
-            os.chdir(orig_cwd)
+        # No need to change directory back since we don't change it
 
     return failed
 
@@ -301,7 +301,7 @@ EXAMPLES:
 
     # Run the tests
     try:
-        failed = run_tests()
+        failed = run_tests(test_dir)
     except Exception as e:
         print(f"Error running tests: {e}")
         failed = 1

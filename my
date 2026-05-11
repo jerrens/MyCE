@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.4.30
+__Version=26.5.11
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -198,13 +198,22 @@ function runCMD() {
             fi
         fi
 
-        # Replace any line wrap chars with an escaped version for the print
+        # Build the dry-run command string and escape special control characters
         dryCMD="CMD: $cmd_string"
         # Append remaining arguments if any
         if [[ $# -gt 0 ]]; then
             dryCMD="$dryCMD $*"
         fi
-        log 0 "${dryCMD//\\n/\\\\n}"
+        # Escape raw backslash-escaped sequences so they are printed literally
+        dryCMD="${dryCMD//\\n/\\\\n}"
+        dryCMD="${dryCMD//\\r/\\\\r}"
+        dryCMD="${dryCMD//\\t/\\\\t}"
+        dryCMD="${dryCMD//\\e/\\\\e}"
+        # Escape actual control characters that may be present in the command string
+        dryCMD="${dryCMD//$'\r'/\\r}"
+        dryCMD="${dryCMD//$'\n'/\\n}"
+        dryCMD="${dryCMD//$'\t'/\\t}"
+        printf '%s\n' "$dryCMD"
         return
     fi
 

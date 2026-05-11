@@ -98,6 +98,16 @@ unk1=echo $UNKNOWN
 unk2=echo ${UNKNOWN}
 unk3=echo "${UNKNOWN:-default}"
 
+# Test commands for dry-run escaping
+# description: Command with newlines
+newline_test=echo -e "Line 1\nLine 2\nLine 3"
+
+# description: Command with ANSI escape sequences
+ansi_test=echo -ne "Starting\e[32m GREEN \e[0mNormal\e[1;31m RED BOLD \e[0mEnd"
+
+# description: Command with carriage returns and cursor movement
+cursor_test=echo -ne "Progress: 0%\rProgress: 50%\rProgress: 100%\nDone"
+
 esc1=echo "\$CONST"
 esc2=echo \${CONST}
 esc3=echo \${CONST:-default}

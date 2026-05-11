@@ -72,4 +72,21 @@ test_cases = {
         "see": "/projectNested/level1/level2$",
         "description": "test.dir should expand to the level2 directory"
     },
+
+    # Dry-run escaping tests
+    "test.newline_test ?": {
+        "cmd": "test.newline_test ?",
+        "see": r"CMD: echo -e \"Line 1\\\\nLine 2\\\\nLine 3\"",
+        "description": "Test that newlines in commands are escaped as \\\\n in dry-run output"
+    },
+    "test.ansi_test ?": {
+        "cmd": "test.ansi_test ?",
+        "see": r"CMD: echo -ne \"Starting\\\\e\[32m GREEN \\\\e\[0mNormal\\\\e\[1;31m RED BOLD \\\\e\[0mEnd\"",
+        "description": "Test that ANSI escape sequences are shown literally (not executed) in dry-run output"
+    },
+    "test.cursor_test ?": {
+        "cmd": "test.cursor_test ?",
+        "see": r"CMD: echo -ne \"Progress: 0%\\\\rProgress: 50%\\\\rProgress: 100%\\\\nDone\"",
+        "description": "Test that carriage returns and other control characters are shown literally in dry-run output"
+    },
 }
