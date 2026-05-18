@@ -300,27 +300,33 @@ EXAMPLES:
     print("Starting tests...\n")
 
     # Run the tests
+    failed = 0
     try:
-        failed = run_tests(test_dir)
-    except Exception as e:
-        print(f"Error running tests: {e}")
-        failed = 1
+        try:
+            failed = run_tests(test_dir)
+        except KeyboardInterrupt:
+            print("\n\nTest interrupted by user (Ctrl+C)")
+            failed = 1
+        except Exception as e:
+            print(f"Error running tests: {e}")
+            failed = 1
+    finally:
+        # Cleanup: remove the test directory and restore CWD
+        # Guarantee cleanup happens even on Ctrl+C or exception
+        os.chdir(orig_cwd)
+        try:
+            shutil.rmtree(test_dir)
+            print(f"Cleaned up test directory: {test_dir}")
+        except Exception as e:
+            print(f"Warning: Failed to clean up test directory: {e}")
 
-    # Cleanup: remove the test directory and restore CWD
-    os.chdir(orig_cwd)
-    try:
-        shutil.rmtree(test_dir)
-        print(f"Cleaned up test directory: {test_dir}")
-    except Exception as e:
-        print(f"Warning: Failed to clean up test directory: {e}")
-
-    # Print test summary
-    total_tests = len(test_cases)
-    passed_tests = total_tests - failed
-    print(f"\n{'='*40}")
-    print(f"Test Summary: {passed_tests}/{total_tests} passed")
-    if failed > 0:
-        print(f"Failed: {failed}")
-    print(f"{'='*40}")
+        # Print test summary
+        total_tests = len(test_cases)
+        passed_tests = total_tests - failed
+        print(f"\n{'='*40}")
+        print(f"Test Summary: {passed_tests}/{total_tests} passed")
+        if failed > 0:
+            print(f"Failed: {failed}")
+        print(f"{'='*40}")
 
     sys.exit(failed)

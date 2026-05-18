@@ -183,6 +183,41 @@ test_cases = {
         "see": "section\\.test\\.key",
         "description": "REGRESSION: Commands in sections should appear if final segment has lowercase"
     },
+
+    "list includes pod commands from conditional block": {
+        "cmd": "list -l -d pod",
+        "pwd": "projectConditionals",
+        "see": "pod\\.up",
+        "description": "REGRESSION: Commands defined inside conditional block should appear in list output"
+    },
+
+    "conditional command visible only when condition matches": {
+        "cmd": "list -l",
+        "pwd": "projectConditionals/visibility",
+        "see": "docker_only",
+        "description": "Test that a command defined inside a matching conditional branch is visible"
+    },
+
+    "conditional command hidden when branch does not match": {
+        "cmd": "list -l",
+        "pwd": "projectConditionals/visibility",
+        "see": "^(?!.*podman_only).*docker_only",
+        "description": "Test that commands defined in non-matching conditional branches are not visible"
+    },
+
+    "list -d preserves conditional descriptions": {
+        "cmd": "list -d web",
+        "pwd": "projectConditionals/simple",
+        "see": "web\\s+This command will print the name of the Docker Web container",
+        "description": "BUG FIX: list -d should preserve descriptions for commands defined inside conditional blocks"
+    },
+
+    "definition echo.web preserves conditional description": {
+        "cmd": "definition echo.web",
+        "pwd": "projectConditionals/simple",
+        "see": "This command will print the name of the Docker Web container",
+        "description": "BUG FIX: definition should show descriptions for conditional commands"
+    },
     
     "list includes all expected commands": {
         "cmd": "list -l",

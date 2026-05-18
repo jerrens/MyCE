@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.5.11
+__Version=26.5.16
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -438,6 +438,8 @@ declare -g __current_cmd=""
 declare -A conditionalConditions
 # Maps: blockId -> space-separated list of definition key=value pairs in this conditional block
 declare -A conditionalDefinitions
+# Map: blockId|key -> description for conditional-defined entries
+declare -A conditionalDefDescriptions
 # Array to track the order of conditional blocks for processing
 declare -a conditionalBlockOrder
 
@@ -624,7 +626,7 @@ function process_ini_file() {
             # Store previous block's definitions using newline as separator
             if [[ "$in_conditional" == "true" ]]; then
                 if [[ -n "$conditional_id" ]]; then
-                    IFS=$'\n' eval 'conditionalDefinitions["$conditional_id"]="${conditional_defs[*]}"'
+                    conditionalDefinitions["$conditional_id"]="$(printf '%s\n' "${conditional_defs[@]}")"
                     log 2 "  Stored block definitions for: $conditional_id"
                     conditionalBlockOrder+=("$conditional_id")
                 fi
@@ -647,7 +649,7 @@ function process_ini_file() {
 
             # Store previous block's definitions using newline as separator
             if [[ "$in_conditional" == "true" && -n "$conditional_id" ]]; then
-                IFS=$'\n' eval 'conditionalDefinitions["$conditional_id"]="${conditional_defs[*]}"'
+                conditionalDefinitions["$conditional_id"]="$(printf '%s\n' "${conditional_defs[@]}")"
                 log 2 "  Stored block definitions for: $conditional_id"
                 conditionalBlockOrder+=("$conditional_id")
             fi
@@ -665,7 +667,7 @@ function process_ini_file() {
 
             # Store final block's definitions using newline as separator
             if [[ "$in_conditional" == "true" && -n "$conditional_id" ]]; then
-                IFS=$'\n' eval 'conditionalDefinitions["$conditional_id"]="${conditional_defs[*]}"'
+                conditionalDefinitions["$conditional_id"]="$(printf '%s\n' "${conditional_defs[@]}")"
                 log 2 "  Stored final block definitions for: $conditional_id"
                 conditionalBlockOrder+=("$conditional_id")
             fi
@@ -727,7 +729,14 @@ function process_ini_file() {
         if [[ "$in_conditional" == "true" ]]; then
             # We're inside a conditional block - accumulate the definition
             log 3 "  CONDITIONAL DEF:  ${key} = ${value}"
+            # Store as tab-separated fields: key <tab> description <tab> value
             conditional_defs+=("${key}=${value}")
+            # If a description was pending for this definition, store it keyed by block and key
+            if [[ -n "${pending_description}" ]]; then
+                conditionalDefDescriptions["${conditional_id}|${key}"]="${pending_description}"
+            fi
+            # Reset pending description after using it for this definition
+            pending_description=""
         else
             # Normal key-value pair (not in conditional block)
             if [[ ! -v commands["$key"] ]]; then
@@ -910,18 +919,29 @@ function evaluate_conditionals() {
                 log 2 "    Applying conditional definitions..."
                 # Split the definitions by newline (each definition is on its own line in the string)
                 while IFS= read -r def; do
-                    if [[ -n "$def" && "$def" == *"="* ]]; then
-                        IFS='=' read -r key value <<< "$def"
-
-                        # Trim whitespace if needed (definitions were stored as-is)
-                        key="${key#"${key%%[![:space:]]*}"}"
-                        key="${key%"${key##*[![:space:]]}"}"
-                        value="${value#"${value%%[![:space:]]*}"}"
-                        value="${value%"${value##*[![:space:]]}"}"
-
-                        log 3 "      Applying: $key = $value"
-                        commands["$key"]="$value"
+                    if [[ -z "$def" ]]; then
+                        continue
                     fi
+
+                    # Support new tab-separated format: key\tdescription\tvalue
+                    # Legacy format: def is "key=value"
+                    IFS='=' read -r key value <<< "$def"
+                    desc="${conditionalDefDescriptions["${block_id}|${key}"]:-}"
+
+                    # Trim whitespace
+                    key="${key#"${key%%[![:space:]]*}"}"
+                    key="${key%"${key##*[![:space:]]}"}"
+                    value="${value#"${value%%[![:space:]]*}"}"
+                    value="${value%"${value##*[![:space:]]}"}"
+                    desc="${desc#"${desc%%[![:space:]]*}"}"
+                    desc="${desc%"${desc##*[![:space:]]}"}"
+
+                    log 3 "      Applying: $key = $value"
+                    commands["$key"]="$value"
+                    # Preserve description for conditional-defined commands
+                    commandDescriptions["$key"]="$desc"
+                    # Record location as the conditional block id (file:startLine)
+                    commandLocations["$key"]="$block_id"
                 done <<< "$defs"
 
                 # Mark this chain as matched so subsequent blocks in chain are skipped
@@ -1124,6 +1144,9 @@ function list_keys() {
     fi
 
     if load_my_custom_files; then
+        # Evaluate conditional definitions so list output reflects merged state
+        evaluate_conditionals
+
         # Determine if variables (uppercase) words should be included
         if [[ "$include_const" == "true" ]]; then
             log 1 "Including Vars"

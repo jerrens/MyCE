@@ -1,0 +1,9 @@
+# Conditional visibility fixture
+
+CONTAINER_ENGINE=docker
+
+[IF $CONTAINER_ENGINE == "podman"]
+    podman_only=echo "Podman command only visible when CONTAINER_ENGINE is podman"
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+    docker_only=echo "Docker command only visible when CONTAINER_ENGINE is docker"
+[FI]
