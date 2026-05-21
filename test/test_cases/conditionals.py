@@ -107,6 +107,35 @@ test_cases = {
         "see": "^Pod config is: development$",
         "description": "Test nested [IF] and inner [ELSE] branch - USE_POD=true and POD_TYPE=dev triggers inner [ELSE]"
     },
+
+    "number override": {
+        "cmd": "number",
+        "pwd": ".",
+        "see": "^One$",
+        "description": "Root conditional number definition"
+    },
+
+    "project number override": {
+        "cmd": "number",
+        "pwd": "projectConditionals/parentOverride",
+        "see": "^Two$",
+        "description": "Project conditional number definition (podman)"
+    },
+
+    "project child number conditional override": {
+        "cmd": "number",
+        "pwd": "projectConditionals/parentOverride/docker",
+        "see": "^Dos$",
+        "description": "Child direct number definition should override parent conditional number definition (docker)"
+    },
+
+    "dev number override": {
+        "cmd": "number",
+        "pwd": "projectConditionals/parentOverride/dev",
+        "see": "^Three$",
+        "description": "Child direct number definition should override all previous definitions"
+    },
+
     
     # Test nested conditionals - ELSE branch with USE_POD not set
     "no-pod echo.pod": {
@@ -210,6 +239,13 @@ test_cases = {
         "pwd": "projectConditionals/simple",
         "see": "web\\s+This command will print the name of the Docker Web container",
         "description": "BUG FIX: list -d should preserve descriptions for commands defined inside conditional blocks"
+    },
+
+    "list web shows conditional command": {
+        "cmd": "list web",
+        "pwd": "projectConditionals/simple",
+        "see": "echo\\.web",
+        "description": "Regression: filtered list should show conditional command key matching web"
     },
 
     "definition echo.web preserves conditional description": {

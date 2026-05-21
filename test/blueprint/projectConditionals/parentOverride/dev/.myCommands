@@ -3,3 +3,5 @@
 # This tests the ELSE branch of the nested [IF $POD_TYPE == "prod"] condition
 USE_POD=true
 POD_TYPE=dev
+
+number=echo "Three"

@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.5.16
+__Version=26.5.21
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -429,6 +429,12 @@ declare -A commands
 declare -A commandDescriptions
 # Stores the file:line location for each command
 declare -A commandLocations
+# Tracks definition order for commands and conditional entries so newer definitions win
+declare -A commandOrder
+# Tracks the parse order of each conditional definition line
+declare -A conditionalDefOrder
+# Monotonic counter for parsed definitions and conditional entries
+declare -i __definition_order=0
 
 # Global variable to track the current command being executed (for DRYRUN metadata lookup)
 declare -g __current_cmd=""
@@ -442,6 +448,16 @@ declare -A conditionalDefinitions
 declare -A conditionalDefDescriptions
 # Array to track the order of conditional blocks for processing
 declare -a conditionalBlockOrder
+# Stack for nested conditional blocks
+declare -a conditional_stack_ids
+declare -a conditional_stack_defs
+
+function trim() {
+    local var="$1"
+    var="${var#"${var%%[![:space:]]*}"}"
+    var="${var%"${var##*[![:space:]]}"}"
+    printf '%s' "$var"
+}
 
 function process_ini_file() {
     log 1 "Loading file: $1"
@@ -460,7 +476,8 @@ function process_ini_file() {
     local in_conditional=false
     local conditional_id=""
     local conditional_defs=()
-    local conditional_stack=()  # Stack for nested conditionals
+    local conditional_stack_ids=()
+    local conditional_stack_defs=()
 
     while IFS= read -r line <&3 || [[ -n "$line" ]]; do
         ((lineNumber++))
@@ -606,16 +623,16 @@ function process_ini_file() {
 
             # If we're already in a conditional, push current state to stack for nesting
             if [[ "$in_conditional" == "true" ]]; then
-                conditional_stack+=("$conditional_id|${conditional_defs[@]}")
+                conditional_stack_ids+=("$conditional_id")
+                conditional_stack_defs+=("$(printf '%s\n' "${conditional_defs[@]}")")
             fi
 
             in_conditional=true
             conditional_id="${filepath}:${lineNumber}"
             conditional_defs=()
             # Extract and store the condition (everything between [IF and ])
-            local condition_expr="${BASH_REMATCH[1]}"
-            condition_expr="${condition_expr#[[:space:]]}"
-            condition_expr="${condition_expr%[[:space:]]}"
+            local condition_expr
+            condition_expr="$(trim "${BASH_REMATCH[1]}")"
             conditionalConditions["$conditional_id"]="$condition_expr"
             log 2 "  Stored condition: '$condition_expr'"
             continue
@@ -636,9 +653,8 @@ function process_ini_file() {
             in_conditional=true
             conditional_id="${filepath}:${lineNumber}"
             conditional_defs=()
-            local condition_expr="${BASH_REMATCH[1]}"
-            condition_expr="${condition_expr#[[:space:]]}"
-            condition_expr="${condition_expr%[[:space:]]}"
+            local condition_expr
+            condition_expr="$(trim "${BASH_REMATCH[1]}")"
             # Store as "ELSE IF: ..." to distinguish from IF blocks during evaluation
             conditionalConditions["$conditional_id"]="ELSE IF: $condition_expr"
             log 2 "  Stored condition: 'ELSE IF: $condition_expr'"
@@ -673,15 +689,18 @@ function process_ini_file() {
             fi
 
             # Handle nested conditionals
-            if [[ ${#conditional_stack[@]} -gt 0 ]]; then
+            if [[ ${#conditional_stack_ids[@]} -gt 0 ]]; then
                 # Pop from stack
-                local last_idx=$((${#conditional_stack[@]} - 1))
-                local popped="${conditional_stack[$last_idx]}"
-                unset 'conditional_stack[$last_idx]'
+                local last_idx=$((${#conditional_stack_ids[@]} - 1))
+                conditional_id="${conditional_stack_ids[$last_idx]}"
+                local defs_serialized="${conditional_stack_defs[$last_idx]}"
+                unset 'conditional_stack_ids[$last_idx]'
+                unset 'conditional_stack_defs[$last_idx]'
 
-                # Restore previous state
-                IFS='|' read -r conditional_id conditional_defs_str <<< "$popped"
-                conditional_defs=($conditional_defs_str)
+                conditional_defs=()
+                if [[ -n "$defs_serialized" ]]; then
+                    IFS=$'\n' read -r -d '' -a conditional_defs < <(printf '%s\0' "$defs_serialized")
+                fi
             else
                 in_conditional=false
                 conditional_id=""
@@ -729,8 +748,9 @@ function process_ini_file() {
         if [[ "$in_conditional" == "true" ]]; then
             # We're inside a conditional block - accumulate the definition
             log 3 "  CONDITIONAL DEF:  ${key} = ${value}"
-            # Store as tab-separated fields: key <tab> description <tab> value
-            conditional_defs+=("${key}=${value}")
+            __definition_order=$((__definition_order + 1))
+            # Store parse order with the definition so newer defs always win
+            conditional_defs+=("${__definition_order}	${key}=${value}")
             # If a description was pending for this definition, store it keyed by block and key
             if [[ -n "${pending_description}" ]]; then
                 conditionalDefDescriptions["${conditional_id}|${key}"]="${pending_description}"
@@ -746,6 +766,8 @@ function process_ini_file() {
                 log 2 "              was '${commands[$key]}'"
             fi
 
+            __definition_order=$((__definition_order + 1))
+            commandOrder["$key"]=$__definition_order
             commands["$key"]=$value
 
             # Store the file location for this command (file:lineNumber)
@@ -775,9 +797,11 @@ function load_my_custom_files() {
     commands=()
     commandDescriptions=()
     commandLocations=()
+    commandOrder=()
     conditionalConditions=()
     conditionalDefinitions=()
     conditionalBlockOrder=()
+    __definition_order=0
 
     # Start in the current directory and move up the directory tree
     declare -a file_paths
@@ -845,16 +869,12 @@ function findKey() {
     log 1 "Searching for cmd: $cmd"
     foundKey_value=""  # Clear previous search result
 
-    for key in "${!commands[@]}"; do
-        log 2 "    Inspecting '$key'"
-        if [[ "$key" == "$cmd" ]]; then
-            foundKey_value="${commands[$key]}"
-            log 1 "      Found: $foundKey_value"
-            return 0  # There will only be one matching key, so stop when found successfully
-        fi
-    done
+    if [[ -v commands["$cmd"] ]]; then
+        foundKey_value="${commands[$cmd]}"
+        log 1 "      Found: $foundKey_value"
+        return 0
+    fi
 
-    # If here, then the key was not found
     return 1
 }
 
@@ -925,7 +945,14 @@ function evaluate_conditionals() {
 
                     # Support new tab-separated format: key\tdescription\tvalue
                     # Legacy format: def is "key=value"
-                    IFS='=' read -r key value <<< "$def"
+                    local def_order=0
+                    local raw_def="$def"
+                    if [[ "$def" == *$'\t'* ]]; then
+                        def_order="${def%%$'\t'*}"
+                        raw_def="${def#*$'\t'}"
+                    fi
+
+                    IFS='=' read -r key value <<< "$raw_def"
                     desc="${conditionalDefDescriptions["${block_id}|${key}"]:-}"
 
                     # Trim whitespace
@@ -936,7 +963,13 @@ function evaluate_conditionals() {
                     desc="${desc#"${desc%%[![:space:]]*}"}"
                     desc="${desc%"${desc##*[![:space:]]}"}"
 
+                    if [[ -n "${commandOrder["$key"]}" ]] && [[ "${commandOrder["$key"]}" -gt "$def_order" ]]; then
+                        log 3 "      Skipping outdated conditional definition for $key (existing order ${commandOrder["$key"]} > ${def_order})"
+                        continue
+                    fi
+
                     log 3 "      Applying: $key = $value"
+                    commandOrder["$key"]=$def_order
                     commands["$key"]="$value"
                     # Preserve description for conditional-defined commands
                     commandDescriptions["$key"]="$desc"
@@ -971,8 +1004,7 @@ function __evaluate_condition() {
     fi
 
     # Trim whitespace
-    condition="${condition#"${condition%%[![:space:]]*}"}"
-    condition="${condition%"${condition##*[![:space:]]}"}"
+    condition="$(trim "$condition")"
 
     # Check for existence (negative) - [IF !$VAR]
     if [[ "$condition" =~ ^![[:space:]]*\$([a-zA-Z_][a-zA-Z0-9_]*)$ ]]; then

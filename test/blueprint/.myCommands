@@ -17,6 +17,8 @@ timestamp=TZ="${TIMEZONE:-America/New_York}" date +"%Y%m%d_%H%M%S"
 multiline=echo "This is a multi-line command \
 that should be treated as a single command"
 
+number=echo "One"
+
 [multi]
 cmd1=echo "First command"
 cmd2=echo "Second \

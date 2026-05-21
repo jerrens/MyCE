@@ -1,6 +1,11 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.5.21
+
+* BugFix: commands inside `[IF]...[ELSE IF]...[ELSE]...[FI]` conditional blocks are now parsed and applied correctly
+* Fixed conditional branch handling so only the matching block merges definitions
+
 ## 26.5.11
 
 * BugFix: Output of dryrun does not preserve escaped characters and ANSI control

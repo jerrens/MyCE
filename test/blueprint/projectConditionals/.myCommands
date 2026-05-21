@@ -7,9 +7,11 @@ CONTAINER_ENGINE=podman
 [IF $CONTAINER_ENGINE == "podman"]
     WEB_CONTAINER=cns-dev-pod-web
     CONTAINER_TOOL=podman
+    number=echo "Two"
 [ELSE IF $CONTAINER_ENGINE == "docker"]
     WEB_CONTAINER=cns-dev-web-1
     CONTAINER_TOOL=docker
+    number=echo "Dos"
 [ELSE]
     WEB_CONTAINER=unknown-container
     CONTAINER_TOOL=unknown
