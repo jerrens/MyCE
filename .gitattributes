@@ -1,0 +1,21 @@
+# Exclude files from GitHub release archives
+# Keep only: my script, auto-complete/, README, LICENSE, CHANGE_HISTORY
+
+# Exclude all directories not needed for end users
+test/ export-ignore
+scratch/ export-ignore
+documentation/ export-ignore
+logo/ export-ignore
+.github/ export-ignore
+.vscode/ export-ignore
+
+# Exclude backup files and scripts
+*.bkp export-ignore
+.myCommands export-ignore
+.myCommands.example export-ignore
+settings.json export-ignore
+
+# Exclude common project files
+.gitignore export-ignore
+.gitattributes export-ignore
+.cspell.json export-ignore
