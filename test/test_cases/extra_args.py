@@ -143,4 +143,103 @@ test_cases = {
         "pwd": "projectE",
         "description": "Test ${*+} expansion (braced form, all remaining args as single string)",
     },
+
+    # Named parameter tests
+    "Named params: basic usage": {
+        "cmd": "named.greet first=John last=Doe",
+        "see": "^Hello John Doe$",
+        "pwd": "projectE",
+        "description": "Test basic named parameter substitution with = delimiter",
+    },
+
+    "Named params: colon delimiter": {
+        "cmd": "named.greet.colon first:Alice last:Smith",
+        "see": "^Hello Alice Smith$",
+        "pwd": "projectE",
+        "description": "Test named parameter substitution with : delimiter",
+    },
+
+    "Named params: single parameter": {
+        "cmd": "named.message msg='Hello World'",
+        "see": "^Message: Hello World$",
+        "pwd": "projectE",
+        "description": "Test single named parameter with quoted value",
+    },
+
+    "Named params: multiple named with spaces": {
+        "cmd": "named.quoted first=John last=Smith location='New York'",
+        "see": "^Full name: John Smith at New York$",
+        "pwd": "projectE",
+        "description": "Test multiple named parameters with quoted values containing spaces",
+    },
+
+    "Named params: with defaults": {
+        "cmd": "named.with.default age=30",
+        "see": "^Name: Guest Age: 30$",
+        "pwd": "projectE",
+        "description": "Test named parameters with default values for unreferenced params",
+    },
+
+    "Named params: with default not provided": {
+        "cmd": "named.with.default",
+        "see": "^Name: Guest Age: 25$",
+        "pwd": "projectE",
+        "description": "Test named parameters using defaults when no args provided",
+    },
+
+    "Named params: undefined reference": {
+        "cmd": "named.undefined.ref",
+        "see": "^Value:$",
+        "pwd": "projectE",
+        "description": "Test that undefined named parameter references are left in command but expand to empty when bash evaluates them",
+    },
+
+    "Named params: mixed positional and named": {
+        "cmd": "named.mixed Alice name=Bob extra",
+        "see": "^Positional: Alice, Named: Bob, Remaining: extra$",
+        "pwd": "projectE",
+        "description": "Test mixing positional and named parameters in same command",
+    },
+
+    "Named params: pass-through unconsumed": {
+        "cmd": "named.pass.through param1=value1 param2=value2",
+        "see": "^This command doesn't reference any named params param1=value1 param2=value2$",
+        "pwd": "projectE",
+        "description": "Test that unconsumed named parameters are passed through to the command",
+    },
+
+    "Named params: special chars - colons in value with = delimiter": {
+        "cmd": "named.special.colon value='url:with:colons'",
+        "see": "^Got: url:with:colons$",
+        "pwd": "projectE",
+        "description": "Test that colons in parameter values work without escaping (using = delimiter)",
+    },
+
+    "Named params: special chars - colons in value with : delimiter": {
+        "cmd": "named.special.colon value:url:with:colons",
+        "see": "^Got: url:with:colons$",
+        "pwd": "projectE",
+        "description": "Test that colons in parameter values work without escaping (using : delimiter)",
+    },
+
+    "Named params: special chars - equals in value with = delimiter": {
+        "cmd": "named.special.equals value='foo=bar=baz'",
+        "see": "^Got: foo=bar=baz$",
+        "pwd": "projectE",
+        "description": "Test that equals signs in parameter values work without escaping (using = delimiter)",
+    },
+
+    "Named params: special chars - equals in value with : delimiter": {
+        "cmd": "named.special.equals value:foo=bar=baz",
+        "see": "^Got: foo=bar=baz$",
+        "pwd": "projectE",
+        "description": "Test that equals signs in parameter values work without escaping (using : delimiter)",
+    },
+
+    "Named params: special chars - both delimiters in value": {
+        "cmd": "named.special.both value='proto:http=default'",
+        "see": "^Got: proto:http=default$",
+        "pwd": "projectE",
+        "description": "Test that both colon and equals can exist in parameter values",
+    },
 }

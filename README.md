@@ -40,6 +40,7 @@ Running `my server.start` will execute docker-compose up.
 - **Merged Configurations**: Reads `.myCommands` files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
 - **Sectioned Commands**: Uses INI-style sections in `.myCommands` files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
 - **Positional Args**: Values within the `.myCommands` file can use positional argument references (ie $1, $2, ${3}), reference all arguments with $@ or $*, or reference remaining (non-referenced) arguments with $@+ or $*+.
+- **Named Parameters**: Commands can accept named parameters using `key=value` or `key:value` syntax, referenced with `$name` or `${name:-default}` patterns for cleaner, more maintainable command definitions.
 - **Default Variable Values**: Default values for variables may be set using the following syntax: `${1:-defaultValue}` or `${CONST:-defaultValue}`
 - **Argument Passing**: Additional arguments provided after the command alias are passed directly to the underlying command. This enables dynamic behavior and flexible command usage.
 - **Fallback to Shell**: If the requested alias is not found in the merged `.myCommands` configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
@@ -196,6 +197,7 @@ When your command references specific positional arguments, you can use `$@+` or
 This is useful for building flexible commands that extract certain args for specific purposes while forwarding the rest unchanged.
 
 **How it works:**
+
 - If a command references `$1` and `$3`, then `$@+` expands to arguments 2 and 4+ (all args except those at positions 1 and 3)
 - `$@+` expands remaining args as separate items (preserves word boundaries)
 - `$*+` expands remaining args as a single unquoted string
@@ -214,6 +216,7 @@ gcc -c main.c -o program.o -O2 -Wall -Wextra
 ```
 
 In this example:
+
 - `$1` (main.c) = source file
 - `$2` (-O2) = not explicitly referenced, included in `$@+`
 - `$3` (program.o) = output file
@@ -231,6 +234,102 @@ run=docker run --name $1 $@+
 >$ my docker.run myapp -it -e DEBUG=1 --volume /data:/data alpine
 docker run --name myapp -it -e DEBUG=1 --volume /data:/data alpine
 ```
+
+#### Named Parameters
+
+In addition to positional arguments, commands can use named parameters passed from the command line.
+This provides a more readable and maintainable alternative to positional arguments when you have multiple optional arguments.
+
+Named parameters use `key=value` or `key:value` syntax on the command line and are referenced in command definitions using `$name` or `${name}` syntax.
+
+**How it works:**
+
+- Named parameters are extracted from the command line before positional argument processing
+- Both `=` and `:` delimiters are supported: `name=John` or `name:John`
+- Values can be quoted to include spaces: `name="John Doe"` or `name='John Doe'`
+- References to named parameters support default values: `${name:-Guest}`
+- Named parameters that aren't referenced in the command are passed through unchanged to the underlying command
+- Positional arguments (`$1`, `$2`, etc.) and named parameters can be used together in the same command
+
+**Basic Example:**
+
+```ini
+[user]
+# Define command using named parameters
+greet=echo "Hello $first $last, welcome to $location"
+```
+
+```bash
+>$ my user.greet first=John last=Doe location=Boston
+Hello John Doe, welcome to Boston
+```
+
+**Named Parameters with Different Delimiters:**
+
+Both `=` and `:` delimiters work interchangeably:
+
+```bash
+>$ my user.greet first:Alice last:Smith location:NYC
+Hello Alice Smith, welcome to NYC
+```
+
+**Named Parameters with Quoted Values:**
+
+Values with spaces must be quoted:
+
+```bash
+>$ my user.greet first="John Paul" last="Van Der" location="New York"
+Hello John Paul Van Der, welcome to New York
+```
+
+**Named Parameters with Default Values:**
+
+Use the `${name:-default}` syntax to provide defaults for parameters that may not be supplied:
+
+```ini
+[greet]
+welcome=echo "Name: ${name:-Guest}, Status: ${status:-active}"
+```
+
+```bash
+>$ my greet.welcome name=Alice
+Name: Alice, Status: active
+
+>$ my greet.welcome name=Bob status=admin
+Name: Bob, Status: admin
+```
+
+**Mixed Positional and Named Parameters:**
+
+You can use both positional arguments and named parameters in the same command:
+
+```ini
+[file]
+# Format: command source_file (positional) with named parameters for options
+convert=echo "Converting $1 to $format at $quality quality"
+```
+
+```bash
+>$ my file.convert input.jpg format=png quality=high
+Converting input.jpg to png at high quality
+```
+
+**Unconsumed Named Parameters Pass-Through:**
+
+If a named parameter isn't referenced in the command definition, it will be passed through to the underlying command:
+
+```ini
+[cmd]
+# This command doesn't reference 'debug' parameter
+run=echo "Running command"
+```
+
+```bash
+>$ my cmd.run debug=true verbose=true
+Running command debug=true verbose=true
+```
+
+This allows flexible commands that accept optional parameters not explicitly handled by the command definition.
 
 #### Conditional Variable Definitions
 

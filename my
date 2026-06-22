@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.6.11
+__Version=26.6.22
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -1493,7 +1493,38 @@ function find_and_run_cmd() {
         max_arg_num=-1
         args=("$@")
         declare -A referenced_positions  # Track which positions are referenced
+        declare -A named_params         # Track named parameters
+        declare -A referenced_names     # Track which named params are referenced
         log 2 "Checking for positional args: $* (${#args[@]})"
+
+        # Extract named parameters (key=value or key:value) from args
+        # Must be done before positional arg processing to reduce args count
+        local new_args=()
+        for arg in "${args[@]}"; do
+            # Match key=value or key:value patterns (word chars only, not $1-style)
+            # Supports quoted values: key="value with spaces" or key='value'
+            if [[ "$arg" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)[:=](.*)$ ]]; then
+                local param_name="${BASH_REMATCH[1]}"
+                local param_value="${BASH_REMATCH[2]}"
+                
+                # Handle quoted values (both single and double quotes)
+                if [[ "$param_value" =~ ^\"(.*)\"$ ]] || [[ "$param_value" =~ ^\'(.*)\'$ ]]; then
+                    param_value="${BASH_REMATCH[1]}"
+                fi
+                
+                named_params["$param_name"]="$param_value"
+                log 2 "Extracted named param: $param_name='$param_value'"
+            else
+                # Not a named param, keep in args array
+                new_args+=("$arg")
+            fi
+        done
+        args=("${new_args[@]}")
+        # Rebuild $@ to only contain positional args (without named params)
+        # This is necessary so that named params don't get double-passed
+        set -- "${args[@]}"
+        log 2 "After named param extraction, remaining positional args: ${#args[@]} - ($*)"
+
         for ((i = ${#args[@]}; i > 0; i--)); do
             arg=${args[$i-1]}
             log 3 "i is ${i}, arg is ${arg}"
@@ -1577,6 +1608,36 @@ function find_and_run_cmd() {
         log 3 "Remaining arguments: $*"
         log 3 "Current evolution of command: $binary_cmd"
 
+        # Handle named parameters: substitute only those that were extracted from arguments
+        # Don't scan the command for all $name patterns - only substitute known named params
+        log 2 "Substituting named parameters..."
+        for param_name in "${!named_params[@]}"; do
+            local param_value="${named_params[$param_name]}"
+            log 2 "Looking for named param: \$$param_name"
+            
+            # Escape special characters in param_value for sed replacement
+            local escaped_value=$(printf '%s\n' "$param_value" | sed 's/[\/&]/\\&/g')
+            
+            # Replace ${name:-default} pattern first (highest specificity)
+            if [[ "$binary_cmd" =~ \$\{$param_name:-[^}]*\} ]]; then
+                log 2 "Found named param '\${$param_name:-...}' in command, replacing with '$param_value'"
+                binary_cmd=$(printf '%s\n' "$binary_cmd" | sed "s/\\\${$param_name:-[^}]*}/$escaped_value/g")
+                referenced_names["$param_name"]=1
+            # Then try ${name} pattern
+            elif [[ "$binary_cmd" =~ \$\{$param_name\} ]]; then
+                log 2 "Found named param '\${$param_name}' in command, replacing with '$param_value'"
+                binary_cmd=$(printf '%s\n' "$binary_cmd" | sed "s/\\\${$param_name}/$escaped_value/g")
+                referenced_names["$param_name"]=1
+            # Finally try $name pattern (word boundary needed to avoid partial matches)
+            elif [[ "$binary_cmd" =~ \$$param_name([^a-zA-Z0-9_]|$) ]]; then
+                log 2 "Found named param '\$$param_name' in command, replacing with '$param_value'"
+                binary_cmd=$(printf '%s\n' "$binary_cmd" | sed "s/\\\$$param_name\\([^a-zA-Z0-9_]\\|$\)/$escaped_value\\1/g")
+                referenced_names["$param_name"]=1
+            else
+                log 3 "Named param '$param_name' not found in command"
+            fi
+        done
+
         local loopCount=0
         # Look for variable references in the command
         #  - Matches ${VAR_NAME}, ${VAR_NAME:-default}, or $VAR_NAME patterns
@@ -1635,11 +1696,24 @@ function find_and_run_cmd() {
         binary_cmd="${binary_cmd//\\\$/$}"
         log 2 "Expanded command to be executed:\n    $binary_cmd\n"
 
+        # Handle unconsumed named parameters
+        # Any named params that weren't referenced in the command should be passed through
+        local unconsumed_named_args=()
+        for param_name in "${!named_params[@]}"; do
+            if [[ -z "${referenced_names[$param_name]}" ]]; then
+                # This named param was not consumed, add it back to args
+                unconsumed_named_args+=("${param_name}=${named_params[$param_name]}")
+                log 2 "Appending unconsumed named param: ${param_name}=${named_params[$param_name]}"
+            fi
+        done
+
         # Run the extracted command with the additional arguments
         __current_cmd="$cmd"  # Set global for DRYRUN metadata lookup
         local args
-        if [ $# -gt 0 ]; then
-            printf -v args '%q ' "$@"
+        if [ $# -gt 0 ] || [[ ${#unconsumed_named_args[@]} -gt 0 ]]; then
+            # Combine remaining positional args with unconsumed named args
+            local all_remaining_args=("$@" "${unconsumed_named_args[@]}")
+            printf -v args '%q ' "${all_remaining_args[@]}"
         fi
         runCMD "$binary_cmd" "$args"
 

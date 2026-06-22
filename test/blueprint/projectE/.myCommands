@@ -39,3 +39,17 @@ remaining.braced.all=echo "Hello ${@+}! How are you today"
 remaining.braced.pos=echo "First: $1, Remaining: ${@+}"
 remaining.braced.multi=echo "Start: $1 - Mid: $3 - Rest: ${@+}"
 remaining.braced.star=echo "All: ${*+}!"
+
+# Test cases for named parameters
+[named]
+greet=echo "Hello $first ${last}"
+greet.colon=echo "Hello $first ${last}"
+message=echo "Message: $msg"
+quoted=echo "Full name: $first $last at $location"
+with.default=echo "Name: ${name:-Guest} Age: ${age:-25}"
+undefined.ref=echo "Value: $undefined_param"
+mixed=echo "Positional: $1, Named: $name, Remaining: $@+"
+pass.through=echo "This command doesn't reference any named params"
+special.colon=echo "Got: $value"
+special.equals=echo "Got: $value"
+special.both=echo "Got: $value"

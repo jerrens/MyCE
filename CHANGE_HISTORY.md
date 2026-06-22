@@ -1,6 +1,15 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.6.22
+
+* **NEW FEATURE: Named Parameters** - Added support for `key=value` and `key:value` syntax for cleaner, more readable command definitions
+  * Both `=` and `:` delimiters supported: `name=John` or `name:John`
+  * Quoted values preserve spaces: `name="John Doe"` or `name='John Doe'`
+  * Default value syntax: `${name:-Guest}` provides fallback for unreferenced parameters
+  * Unconsumed parameters (not referenced in command definition) pass through to underlying command
+  * Positional arguments ($1, $2, etc.) and named parameters work together seamlessly
+
 ## 26.6.11
 
 * **NEW FEATURE: Remaining Arguments Syntax** - Added `$@+` and `$*+` for referencing non-referenced arguments
