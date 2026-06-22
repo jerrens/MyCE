@@ -26,3 +26,16 @@ quote=echo "Quoted $@"
 withvar=echo "Name: $1 Age: 25"
 pos1=echo "First: $1 Second: $2 Third: $3"
 default=echo "With defaults"
+
+# Test cases for remaining arguments ($@+ and $*+)
+remaining.all=echo "Hello $@+! How are you today"
+remaining.with.pos=echo "First: $1, Remaining: $@+"
+remaining.multi.pos=echo "Start: $1 - Mid: $3 - Rest: $@+"
+remaining.star=echo "All: $*+!"
+remaining.starPos=echo "Start: $1; Rest: $*+; Mid: $3"
+
+# Test cases for remaining arguments with braced syntax
+remaining.braced.all=echo "Hello ${@+}! How are you today"
+remaining.braced.pos=echo "First: $1, Remaining: ${@+}"
+remaining.braced.multi=echo "Start: $1 - Mid: $3 - Rest: ${@+}"
+remaining.braced.star=echo "All: ${*+}!"

@@ -1,6 +1,15 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.6.11
+
+* **NEW FEATURE: Remaining Arguments Syntax** - Added `$@+` and `$*+` for referencing non-referenced arguments
+  * When command uses `$1` and `$3`, then `$@+` expands to args 2 and 4+ (skips referenced positions)
+  * `$@+` preserves word boundaries (separate args), `$*+` joins to single string
+  * Supports braced forms: `${@+}`, `${*+}`
+  * Respects bash escaping: `\$@+` not expanded
+  * Useful for extracting specific args while forwarding remaining args unchanged
+
 ## 26.5.21
 
 * BugFix: commands inside `[IF]...[ELSE IF]...[ELSE]...[FI]` conditional blocks are now parsed and applied correctly

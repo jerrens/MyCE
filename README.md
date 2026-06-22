@@ -39,7 +39,7 @@ Running `my server.start` will execute docker-compose up.
 - **Recursive Lookup**: If a `.myCommands` file is not found in the current directory, the script searches parent directories until one is found.
 - **Merged Configurations**: Reads `.myCommands` files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
 - **Sectioned Commands**: Uses INI-style sections in `.myCommands` files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
-- **Positional Args**: Values within the `.myCommands` file can use positional argument references (ie $1, $2, ${3}), or reference all arguments with $@ or $*.
+- **Positional Args**: Values within the `.myCommands` file can use positional argument references (ie $1, $2, ${3}), reference all arguments with $@ or $*, or reference remaining (non-referenced) arguments with $@+ or $*+.
 - **Default Variable Values**: Default values for variables may be set using the following syntax: `${1:-defaultValue}` or `${CONST:-defaultValue}`
 - **Argument Passing**: Additional arguments provided after the command alias are passed directly to the underlying command. This enables dynamic behavior and flexible command usage.
 - **Fallback to Shell**: If the requested alias is not found in the merged `.myCommands` configurations, the script will pass the command to the shell, allowing standard shell commands to work seamlessly with `my`.
@@ -161,6 +161,9 @@ Commands support multiple ways to reference arguments:
 - `$1`, `$2`, `${3}` - Access specific numbered arguments
 - `$@` - Expands to all arguments as separate quoted strings (useful for preserving argument boundaries)
 - `$*` - Expands to all arguments as a single unquoted string
+- `$@+`, `$*+` - Expands to remaining (non-referenced) arguments only—useful when you reference specific positions but want to pass unconsumed args through
+
+##### Basic Positional Arguments
 
 Example:
 
@@ -185,6 +188,48 @@ Running with file1 file2 file3
 
 >$ my tools.combine one two three
 Combined: one two three
+```
+
+##### Remaining Arguments (`$@+` and `$*+`)
+
+When your command references specific positional arguments, you can use `$@+` or `$*+` to include all arguments that weren't explicitly referenced.
+This is useful for building flexible commands that extract certain args for specific purposes while forwarding the rest unchanged.
+
+**How it works:**
+- If a command references `$1` and `$3`, then `$@+` expands to arguments 2 and 4+ (all args except those at positions 1 and 3)
+- `$@+` expands remaining args as separate items (preserves word boundaries)
+- `$*+` expands remaining args as a single unquoted string
+
+Example:
+
+```ini
+[build]
+# Compile: use source file ($1) and output file ($3), forward remaining compiler flags
+compile=gcc -c $1 -o $3 $@+
+```
+
+```bash
+>$ my build.compile main.c -O2 program.o -Wall -Wextra
+gcc -c main.c -o program.o -O2 -Wall -Wextra
+```
+
+In this example:
+- `$1` (main.c) = source file
+- `$2` (-O2) = not explicitly referenced, included in `$@+`
+- `$3` (program.o) = output file
+- `$@+` = remaining args (the unreferenced -O2 and any additional flags like -Wall -Wextra)
+
+Another example with simple forwarding:
+
+```ini
+[docker]
+# Reference the container name, forward all other docker run options
+run=docker run --name $1 $@+
+```
+
+```bash
+>$ my docker.run myapp -it -e DEBUG=1 --volume /data:/data alpine
+docker run --name myapp -it -e DEBUG=1 --volume /data:/data alpine
 ```
 
 #### Conditional Variable Definitions

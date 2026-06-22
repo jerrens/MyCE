@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.5.21
+__Version=26.6.11
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -1492,6 +1492,7 @@ function find_and_run_cmd() {
         # Handle positional args first
         max_arg_num=-1
         args=("$@")
+        declare -A referenced_positions  # Track which positions are referenced
         log 2 "Checking for positional args: $* (${#args[@]})"
         for ((i = ${#args[@]}; i > 0; i--)); do
             arg=${args[$i-1]}
@@ -1500,7 +1501,8 @@ function find_and_run_cmd() {
             # Updated regex pattern to match: `$1`, `${1}`, and `${1:-Hello}` patterns
             if [[ "$binary_cmd" =~ (^|[^\\])(\$\{?($i)(}|:-[^}\"]*\}?)?) ]]; then
                 log 1 "Positional Argument Match Results - [0]='${BASH_REMATCH[0]}'; [1]='${BASH_REMATCH[1]}'; [2]='${BASH_REMATCH[2]}'; [3]='${BASH_REMATCH[3]}'"
-                # Record this max reference so we know how much to shift
+                # Record this position as referenced
+                referenced_positions[$i]=1
                 if [ "${BASH_REMATCH[3]}" -gt "$max_arg_num" ]; then
                     max_arg_num=${BASH_REMATCH[3]}
                     log 3 "Highest positional arg found at $max_arg_num"
@@ -1517,10 +1519,36 @@ function find_and_run_cmd() {
             fi
         done
 
-        # Handle $@ and $* - all positional arguments
+        # Handle $@+ and $*+ - remaining (non-referenced) positional arguments
+        # Build remaining args list (all args except those that were explicitly referenced)
+        if [[ "$binary_cmd" =~ (^|[^\\])\$(\{?[@*]\+\}?) ]]; then
+            log 2 "Found \$@+ or \$*+ reference - replacing with remaining (non-referenced) args"
+
+            # Build remaining args string (skip positions that were referenced)
+            local remaining_args_str=""
+            for ((idx = 1; idx <= ${#args[@]}; idx++)); do
+                if [[ -z "${referenced_positions[$idx]}" ]]; then
+                    remaining_args_str+="${args[$idx-1]} "
+                fi
+            done
+            remaining_args_str="${remaining_args_str% }"  # Remove trailing space
+
+            # Replace $@+ and $*+ patterns
+            binary_cmd="${binary_cmd//\$@+/$remaining_args_str}"
+            binary_cmd="${binary_cmd//\$\*+/$remaining_args_str}"
+            binary_cmd="${binary_cmd//\$\{@+\}/$remaining_args_str}"
+            binary_cmd="${binary_cmd//\$\{*+\}/$remaining_args_str}"
+
+            log 2 "    After \$@+ replacement: $binary_cmd"
+
+            # Mark all args as consumed (since we've now processed all remaining args)
+            max_arg_num=${#args[@]}
+        fi
+
+        # Handle $@ and $* - all positional arguments (unchanged by $@+ logic)
         # These special variables represent all arguments and should consume all args
-        if [[ "$binary_cmd" =~ (^|[^\\])\$[@*] ]]; then
-            log 2 "Found \$@ or \$* reference - replacing with all args"
+        if [[ "$binary_cmd" =~ (^|[^\\])\$[@*][^+] ]] || [[ "$binary_cmd" =~ (^|[^\\])\$[@*]$ ]]; then
+            log 2 "Found \$@ or \$* reference (not \$@+/\$*+) - replacing with all args"
 
             # Build the args string from the original args array
             local all_args_str=""
