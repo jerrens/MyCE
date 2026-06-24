@@ -19,6 +19,11 @@ that should be treated as a single command"
 
 number=echo "One"
 
+# description: Ask for confirmation with a yes/no prompt and return true if the user confirms with 'Y' or 'y'
+# Can be used in scripts like: `testConfirm={ $confirm } && echo "Confirmed" || echo "Rejected"`
+confirm=read -rp "Are you sure? [Y/n] " -n 1 && echo && [[ $REPLY =~ ^[Yy]$ ]];
+testConfirm={ $confirm } && echo "Confirmed" || echo "Rejected"
+
 [multi]
 cmd1=echo "First command"
 cmd2=echo "Second \
@@ -147,7 +152,6 @@ echo_with_prefix=echo prefix: $1
 MYVALUE=echo
 test_var_sub=echo result_${variable.replacement.MYVALUE}_end
 test_var_start=${variable.replacement.MYVALUE} is here
-
 
 [alias]
 merge=echo blueprint-default-value

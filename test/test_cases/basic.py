@@ -70,8 +70,32 @@ test_cases = {
     # System Commands
     "echo 'Hello World'": "Hello World",
 
+    # Interactive prompt regression tests
+    "testConfirm (yes)": {
+        "pre": "printf 'y\\n' |",
+        "cmd": "testConfirm",
+        "see": "^Confirmed$",
+        "description": "Regression: yes input should confirm"
+    },
+    "testConfirm (no)": {
+        "pre": "printf 'n\\n' |",
+        "cmd": "testConfirm",
+        "see": "^Rejected$",
+        "description": "Regression: no input should reject"
+    },
+    "testConfirm prompt visible on TTY": {
+        "raw_cmd": "printf 'y\\n' | script -qec '__exe__ testConfirm' /dev/null",
+        "see": "Are you sure\\? \[Y/n\].*Confirmed",
+        "description": "Regression: read -p prompt must be visible when running in a TTY"
+    },
+
     '#STDERR': "STDERR Filtering",
     "unknown cmd": "^Unknown key or command",
+    "unknown cmd no bash line-noise": {
+        "cmd": "unknown cmd",
+        "see": "^(?!.*line [0-9]+:.*command not found).*Unknown key or command",
+        "description": "Regression: unknown commands should not include bash line-noise"
+    },
     "ls /bad": "ls: cannot access '/bad': No such file or directory",
 
     '#ENV': 'Checking ENV Variables',

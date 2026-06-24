@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.6.22
+__Version=26.6.24
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -233,13 +233,39 @@ function runCMD() {
         log 2 "MYCE_RUNCOM = ${MYCE_RUNCOM}"
     fi
 
+    # Pre-check the first command word to provide a friendly message before eval.
+    # Skip leading KEY=value tokens and allow subshell/arithmetic forms starting with '('.
+    local -a __words
+    read -ra __words <<< "$cmd_string"
+    local __cmd_word=""
+    local __w
+    for __w in "${__words[@]}"; do
+        if [[ "$__w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+            continue
+        fi
+        __cmd_word="$__w"
+        break
+    done
+
+    if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]]; then
+        # For paths (containing / or ~), check if file exists and is executable
+        # For other commands, use 'type' to find them in PATH or as shell functions
+        if [[ "$__cmd_word" == */* ]] || [[ "$__cmd_word" == ~* ]]; then
+            # Expand tilde and check if file exists and is executable
+            local __expanded_path="${__cmd_word/\~/$HOME}"
+            if [[ ! -x "$__expanded_path" ]]; then
+                log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
+                return 127
+            fi
+        elif ! type -t "$__cmd_word" >/dev/null 2>&1; then
+            log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
+            return 127
+        fi
+    fi
+
     # Execute the command directly to preserve TTY context and allow ANSI color codes
-    # Filter stderr: suppress the shell's own "command not found" lines (those starting with this
-    # script's path), while passing everything else through live.
     # NOTE: eval is intentional here — needed to expand aliases after sourcing the shell rc file.
-    eval "$cmd_string" "$@" 2> >(
-        awk -v exe="$__ExePath" -v verbose="$VERBOSE" 'index($0, exe) == 1 && /: command not found$/ && verbose < 1 { next } { print > "/dev/stderr"; fflush() }'
-    )
+    eval "$cmd_string" "$@"
     local exit_code=$?
 
     # If the exit code is 127, it means a "command not found" from the shell

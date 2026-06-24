@@ -91,6 +91,7 @@ def run_tests(test_dir):
             if isinstance(val, dict):
                 cmd_prefix = val.get("pre", "")
                 cmd_suffix = val.get("cmd", command) # Allow overwritting with the 'cmd' key if present
+                raw_cmd = val.get("raw_cmd", None) # Optional full command override (bypasses __exe__ injection)
                 env_list = val.get("env", None)
                 expected_output = val.get("see", "Missing 'see' property in test")
                 description = val.get("description", "")
@@ -98,6 +99,7 @@ def run_tests(test_dir):
             else:
                 cmd_prefix = ""
                 cmd_suffix = command
+                raw_cmd = None
                 env_list = None
                 expected_output = val
                 description = ""
@@ -114,7 +116,13 @@ def run_tests(test_dir):
             test_cwd = os.path.join(orig_cwd, pwd) if not os.path.isabs(pwd) else pwd
             # Don't change directory, use cwd in subprocess.run
 
-            test_cmd = f"{cmd_prefix} {exe} {cmd_suffix}"
+            if raw_cmd is not None:
+                test_cmd = raw_cmd
+            else:
+                test_cmd = f"{cmd_prefix} {exe} {cmd_suffix}"
+
+            # Allow test commands to reference the executable path via __exe__ token.
+            test_cmd = test_cmd.replace("__exe__", exe)
 
             if "-d" in sys.argv or "--debug" in sys.argv:
                 print(f">> Executing: {test_cmd}\n\t", end="")
