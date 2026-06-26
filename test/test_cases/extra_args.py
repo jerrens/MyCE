@@ -26,6 +26,22 @@ test_cases = {
         "description": "Test command execution with multiple positional arguments",
     },
     
+    # Test command execution with braced $@ expansion (regression test for argument duplication bug)
+    "Command execution with braced $@ expansion": {
+        "cmd": "extra.multibraced World",
+        "see": "^Multiple args: World$",
+        "pwd": "projectE",
+        "description": "Regression test: ${@} should not duplicate arguments (bug: was outputting 'World World' instead of 'World')",
+    },
+    
+    # Test command execution with braced $@ expansion with multiple arguments
+    "Command execution with braced $@ and multiple args": {
+        "cmd": "extra.multibraced Foo Bar Baz",
+        "see": "^Multiple args: Foo Bar Baz$",
+        "pwd": "projectE",
+        "description": "Regression test: ${@} with multiple args should expand correctly without duplication",
+    },
+    
     # Test command execution with arguments containing spaces
     "Command execution with quoted args": {
         "cmd": "extra.quote 'Hello World'",
@@ -241,5 +257,53 @@ test_cases = {
         "see": "^Got: proto:http=default$",
         "pwd": "projectE",
         "description": "Test that both colon and equals can exist in parameter values",
+    },
+
+    # Test $@ with positional args (should include ALL args including referenced ones)
+    "All args with positional: single positional and $@": {
+        "cmd": "extra.all.with.pos John Doe",
+        "see": "^First: John, All: John Doe$",
+        "pwd": "projectE",
+        "description": "Regression test: $@ should include ALL args (including $1), not just remaining",
+    },
+
+    # Test ${@} with positional args (should include ALL args including referenced ones)
+    "All args braced with positional: single positional and ${@}": {
+        "cmd": "extra.all.braced.with.pos Jane Smith",
+        "see": "^First: Jane, All: Jane Smith$",
+        "pwd": "projectE",
+        "description": "Regression test: ${@} should include ALL args (including $1), not just remaining",
+    },
+
+    # Test $@ with multiple positional args (should include ALL args)
+    "All args with multiple positional: $1, $2, and $@": {
+        "cmd": "extra.all.with.multi.pos Alice Bob Charlie",
+        "see": "^Start: Alice, Second: Bob, All: Alice Bob Charlie$",
+        "pwd": "projectE",
+        "description": "Regression test: $@ should include ALL args (including $1 and $2), not just remaining",
+    },
+
+    # Test ${@} with multiple positional args (should include ALL args)
+    "All args braced with multiple positional: $1, $2, and ${@}": {
+        "cmd": "extra.all.braced.with.multi.pos Tom Jerry Spike",
+        "see": "^Start: Tom, Second: Jerry, All: Tom Jerry Spike$",
+        "pwd": "projectE",
+        "description": "Regression test: ${@} should include ALL args (including $1 and $2), not just remaining",
+    },
+
+    # Test $* with positional args (should include ALL args as single string)
+    "All args star with positional: $1 and $*": {
+        "cmd": "extra.all.star.with.pos One Two Three",
+        "see": "^First: One, All: One Two Three$",
+        "pwd": "projectE",
+        "description": "Test $* should include ALL args as single string (including $1), not just remaining",
+    },
+
+    # Test ${*} with positional args (should include ALL args as single string)
+    "All args star braced with positional: $1 and ${*}": {
+        "cmd": "extra.all.star.braced.with.pos First Second Third",
+        "see": "^First: First, All: First Second Third$",
+        "pwd": "projectE",
+        "description": "Test ${*} should include ALL args as single string (including $1), not just remaining",
     },
 }

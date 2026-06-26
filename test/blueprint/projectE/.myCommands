@@ -21,11 +21,23 @@ use_defined=echo "${ini.var.defined_ref}"
 noargs=echo "Execute noargs"
 single=echo "Hello $1"
 multi=echo "Multiple args: $@"
+multibraced=echo "Multiple args: ${@}"
 varargs=echo "Variable args: $*"
 quote=echo "Quoted $@"
 withvar=echo "Name: $1 Age: 25"
 pos1=echo "First: $1 Second: $2 Third: $3"
 default=echo "With defaults"
+
+# Test cases for all arguments ($@ and ${@}) combined with positional args
+# These should include ALL args (including previously referenced ones)
+all.with.pos=echo "First: $1, All: $@"
+all.braced.with.pos=echo "First: $1, All: ${@}"
+all.with.multi.pos=echo "Start: $1, Second: $2, All: $@"
+all.braced.with.multi.pos=echo "Start: $1, Second: $2, All: ${@}"
+
+# Test cases for all arguments (*) combined with positional args
+all.star.with.pos=echo "First: $1, All: $*"
+all.star.braced.with.pos=echo "First: $1, All: ${*}"
 
 # Test cases for remaining arguments ($@+ and $*+)
 remaining.all=echo "Hello $@+! How are you today"

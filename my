@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.6.24
+__Version=26.6.26
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -1604,7 +1604,8 @@ function find_and_run_cmd() {
 
         # Handle $@ and $* - all positional arguments (unchanged by $@+ logic)
         # These special variables represent all arguments and should consume all args
-        if [[ "$binary_cmd" =~ (^|[^\\])\$[@*][^+] ]] || [[ "$binary_cmd" =~ (^|[^\\])\$[@*]$ ]]; then
+        # Pattern matches: $@, ${@}, $*, ${*}, and variations (but not $@+, $*+, ${@+}, ${*+})
+        if [[ "$binary_cmd" =~ (^|[^\\])\$(\{)?[@*](\})?[^+] ]] || [[ "$binary_cmd" =~ (^|[^\\])\$(\{)?[@*](\})?$ ]]; then
             log 2 "Found \$@ or \$* reference (not \$@+/\$*+) - replacing with all args"
 
             # Build the args string from the original args array
@@ -1614,8 +1615,10 @@ function find_and_run_cmd() {
             done
             all_args_str="${all_args_str% }"  # Remove trailing space
 
-            # Replace both $@ and $* patterns
+            # Replace both $@ and $* patterns (with and without curly braces)
+            binary_cmd="${binary_cmd//\$\{@\}/$all_args_str}"
             binary_cmd="${binary_cmd//\$@/$all_args_str}"
+            binary_cmd="${binary_cmd//\$\{\*\}/$all_args_str}"
             binary_cmd="${binary_cmd//\$\*/$all_args_str}"
 
             log 2 "    After \$@ replacement: $binary_cmd"

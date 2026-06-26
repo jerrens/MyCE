@@ -1,6 +1,14 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.6.26
+
+* **BugFix: Argument Expansion with Braced Syntax** - Fixed `${@}` and `${*}` expansion when combined with positional arguments
+  * Regex pattern now detects both `$@`/`$*` and `${@}`/`${*}` forms (previously only detected unbraced forms)
+  * Both braced and unbraced forms now expand correctly to include all arguments
+* **Added Regression Tests** - Enhanced test coverage for argument expansion edge cases
+  * All 8 new tests verify that `$@`/`${@}`/`$*`/`${*}` expand to ALL args (including referenced ones), distinguishing from `$@+`/`${@+}`/`$*+`/`${*+}` which expand to remaining args only
+
 ## 26.6.22
 
 * **NEW FEATURE: Named Parameters** - Added support for `key=value` and `key:value` syntax for cleaner, more readable command definitions
