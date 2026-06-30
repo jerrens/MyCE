@@ -1,6 +1,11 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.6.30
+
+* **BugFix: Command Substitution in Executable Paths** - Fixed command pre-validation for commands whose first word contains `$(...)`
+* **Added Regression Test** - Added portable Linux test coverage for command-substitution path handling
+
 ## 26.6.26
 
 * **BugFix: Argument Expansion with Braced Syntax** - Fixed `${@}` and `${*}` expansion when combined with positional arguments

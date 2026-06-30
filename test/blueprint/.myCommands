@@ -121,6 +121,10 @@ esc3=echo \${CONST:-default}
 esc4=echo \${1}
 esc5=echo "\${1:-def} ${2:-ALT}"
 
+# Test command substitution in command path (regression test for bug fix)
+# description: Command using $(...) substitution in the path - should properly extract the word containing the substitution
+testSubshellPath=$(echo /usr/bin)/echo
+
 # Run these test with `my test.pos $(seq 1 15)`
 # Expect 10 1 5 11 12 13 14 15
 pos=echo $10 $1 $5 \$8

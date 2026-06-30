@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.6.26
+__Version=26.6.30
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -138,6 +138,67 @@ function log() {
     fi
 }
 
+# Helper function to extract the first word from a command string
+# while properly handling command substitutions (the $(...) syntax)
+# These are treated as atomic units that span across spaces
+__extract_first_word() {
+    local cmd="$1"
+    local word=""
+    local i=0
+    local len=${#cmd}
+    local in_substitution=false
+    local paren_depth=0
+    
+    while (( i < len )); do
+        local char="${cmd:i:1}"
+        
+        # If we hit whitespace and we have a word and are not in substitution, we're done
+        if [[ "$char" =~ [[:space:]] ]] && [[ -n "$word" ]] && ! $in_substitution; then
+            echo "$word"
+            return
+        fi
+        
+        # Skip leading whitespace if no word yet
+        if [[ "$char" =~ [[:space:]] ]] && [[ -z "$word" ]]; then
+            ((i++))
+            continue
+        fi
+        
+        # Handle command substitution (dollar followed by open paren)
+        if [[ "$char" == '$' && "${cmd:i+1:1}" == '(' ]] && ! $in_substitution; then
+            in_substitution=true
+            paren_depth=1
+            word+='$('
+            ((i += 2))
+            continue
+        fi
+        
+        # Track parentheses depth inside command substitution
+        if $in_substitution; then
+            word+="$char"
+            if [[ "$char" == '(' ]]; then
+                ((paren_depth++))
+            elif [[ "$char" == ')' ]]; then
+                ((paren_depth--))
+                if (( paren_depth == 0 )); then
+                    in_substitution=false
+                fi
+            fi
+            ((i++))
+            continue
+        fi
+        
+        # Regular character - add to word and continue
+        word+="$char"
+        ((i++))
+    done
+    
+    # Return whatever word we've collected
+    if [[ -n "$word" ]]; then
+        echo "$word"
+    fi
+}
+
 while getopts 'dvc' option; do
     # echo "Option: ${option}"
     case ${option} in
@@ -235,16 +296,14 @@ function runCMD() {
 
     # Pre-check the first command word to provide a friendly message before eval.
     # Skip leading KEY=value tokens and allow subshell/arithmetic forms starting with '('.
-    local -a __words
-    read -ra __words <<< "$cmd_string"
-    local __cmd_word=""
-    local __w
-    for __w in "${__words[@]}"; do
-        if [[ "$__w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-            continue
-        fi
-        __cmd_word="$__w"
-        break
+    local __cmd_word
+    __cmd_word=$(__extract_first_word "$cmd_string")
+    
+    # Skip non-command-word tokens (e.g., KEY=value assignments)
+    while [[ "$__cmd_word" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do
+        # This word is an assignment, skip it and find the next word
+        local remainder="${cmd_string#*$__cmd_word}"
+        __cmd_word=$(__extract_first_word "$remainder")
     done
 
     if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]]; then
@@ -253,9 +312,18 @@ function runCMD() {
         if [[ "$__cmd_word" == */* ]] || [[ "$__cmd_word" == ~* ]]; then
             # Expand tilde and check if file exists and is executable
             local __expanded_path="${__cmd_word/\~/$HOME}"
-            if [[ ! -x "$__expanded_path" ]]; then
-                log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
-                return 127
+            
+            # If the path contains unevaluated variables/substitutions, evaluate it safely
+            if [[ "$__expanded_path" == *\$* ]]; then
+                __expanded_path=$(eval echo "$__expanded_path" 2>/dev/null) || __expanded_path=""
+            fi
+            
+            # Only validate if we have a concrete path (no unevaluated variables)
+            if [[ -n "$__expanded_path" ]] && [[ ! "$__expanded_path" == *\$* ]]; then
+                if [[ ! -x "$__expanded_path" ]]; then
+                    log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
+                    return 127
+                fi
             fi
         elif ! type -t "$__cmd_word" >/dev/null 2>&1; then
             log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
