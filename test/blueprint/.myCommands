@@ -121,10 +121,6 @@ esc3=echo \${CONST:-default}
 esc4=echo \${1}
 esc5=echo "\${1:-def} ${2:-ALT}"
 
-# Test command substitution in command path (regression test for bug fix)
-# description: Command using $(...) substitution in the path - should properly extract the word containing the substitution
-testSubshellPath=$(echo /usr/bin)/echo
-
 # Run these test with `my test.pos $(seq 1 15)`
 # Expect 10 1 5 11 12 13 14 15
 pos=echo $10 $1 $5 \$8
@@ -159,3 +155,57 @@ test_var_start=${variable.replacement.MYVALUE} is here
 
 [alias]
 merge=echo blueprint-default-value
+
+[subshell]
+# Word extraction tests - regression tests for __extract_first_word() function
+# description: Command with command substitution path - alternative form $(command)
+backtickPath=$(echo /usr/bin)/echo
+
+# description: Command with double-quoted argument containing spaces - quotes should not be treated as word boundary
+quotedArg=echo "This is a quoted string"
+
+# description: Command with single-quoted argument - should preserve literal characters
+singleQuotedArg=echo 'Single quoted: $VARIABLE'
+
+# description: Command with process substitution in argument - should handle <(...) and >(...) correctly
+processSub=cat <(echo hello)
+
+# description: Command with complex parameter expansion with colons and slashes
+complexExpansion=echo ${BIN_ROOT}/echo
+
+# description: Command using $(...) substitution in the path - should properly extract the word containing the substitution
+subshellPath=$(echo /usr/bin)/echo
+
+# Additional variations covering edge cases
+# description: Process substitution output form >(...)
+processSubOut=tee >(cat)
+
+# description: Escaped space in command argument
+escapedSpace=echo hello\ world
+
+# description: Nested command substitution - using date in the outer substitution
+nestedSub=echo $(echo 2026)
+
+# description: Mixed single and double quotes
+mixedQuotes=echo 'single' "double"
+
+# description: Double-quoted string containing command substitution
+quotedWithSub=echo "Today is $(date +%Y-%m-%d)"
+
+# description: Parameter expansion with default value
+paramDefault=echo ${UNDEFINED_VAR:-fallback}
+
+# description: Parameter expansion with substring
+paramSubstr=echo ${BIN_ROOT:0:4}
+
+# description: Parameter expansion with pattern removal
+paramPattern=echo test
+
+# description: Multiple consecutive command substitutions in word
+multiSub=echo $(echo hello)world
+
+# description: Command substitution with spaces in output
+subWithSpaces=echo spaced\ output
+
+# description: Double quotes with literal dollar (backslash escaping)
+escapedDollar=echo 'Literal: $VARIABLE'
