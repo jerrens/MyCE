@@ -79,6 +79,11 @@ Conditionals are evaluated after all files are loaded, so child-directory variab
 alias my='/path/to/my'
 ```
 
+## Technical Documentation
+
+For in-depth information about advanced bash syntax handling and comprehensive examples of complex command definitions, see:
+
+- **[Bash Syntax Support](./documentation/BashSyntaxSupport.md)** - Guide covering how MyCE handles command substitution `$(...)`, backticks, quotes, process substitution, escaped spaces, and parameter expansion with practical examples.
 
 ## Usage
 
