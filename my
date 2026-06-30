@@ -139,21 +139,28 @@ function log() {
 }
 
 # Helper function to extract the first word from a command string
-# while properly handling command substitutions (the $(...) syntax)
-# These are treated as atomic units that span across spaces
+# Handles: quoted strings, command substitutions $(...) and `...`, 
+# process substitution <(...) and >(...), escaped spaces, and complex expansions
 __extract_first_word() {
     local cmd="$1"
     local word=""
     local i=0
     local len=${#cmd}
-    local in_substitution=false
+    local in_substitution=0
     local paren_depth=0
+    local in_single_quote=0
+    local in_double_quote=0
+    local in_backtick=0
+    local in_process_sub=0
+    local prev_char=""
     
     while (( i < len )); do
         local char="${cmd:i:1}"
         
-        # If we hit whitespace and we have a word and are not in substitution, we're done
-        if [[ "$char" =~ [[:space:]] ]] && [[ -n "$word" ]] && ! $in_substitution; then
+        # If we hit whitespace and we have a word and are not in any special context, we're done
+        if [[ "$char" =~ [[:space:]] ]] && [[ -n "$word" ]] && \
+           (( ! in_substitution )) && (( ! in_single_quote )) && (( ! in_double_quote )) && \
+           (( ! in_backtick )) && (( ! in_process_sub )); then
             echo "$word"
             return
         fi
@@ -164,32 +171,120 @@ __extract_first_word() {
             continue
         fi
         
-        # Handle command substitution (dollar followed by open paren)
-        if [[ "$char" == '$' && "${cmd:i+1:1}" == '(' ]] && ! $in_substitution; then
-            in_substitution=true
+        # Handle escaped characters (backslash escapes the next character)
+        if [[ "$prev_char" == '\' ]] && (( ! in_single_quote )); then
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle single quotes (nothing special inside, including no escaping)
+        if [[ "$char" == "'" ]] && (( ! in_double_quote )) && (( ! in_backtick )); then
+            in_single_quote=$(( ! in_single_quote ))
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # If in single quotes, just add the character
+        if (( in_single_quote )); then
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle double quotes
+        if [[ "$char" == '"' ]] && (( ! in_backtick )); then
+            in_double_quote=$(( ! in_double_quote ))
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # If in double quotes, add character (but still track special syntax inside)
+        if (( in_double_quote )); then
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle backtick command substitution `...`
+        if [[ "$char" == '`' ]]; then
+            in_backtick=$(( ! in_backtick ))
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # If in backtick, add character
+        if (( in_backtick )); then
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle command substitution $(...) 
+        if [[ "$char" == '$' && "${cmd:i+1:1}" == '(' ]] && (( ! in_substitution )); then
+            in_substitution=1
             paren_depth=1
             word+='$('
+            prev_char='('
             ((i += 2))
             continue
         fi
         
-        # Track parentheses depth inside command substitution
-        if $in_substitution; then
+        # Track parentheses depth inside $(...) substitution
+        if (( in_substitution )); then
             word+="$char"
             if [[ "$char" == '(' ]]; then
                 ((paren_depth++))
             elif [[ "$char" == ')' ]]; then
                 ((paren_depth--))
                 if (( paren_depth == 0 )); then
-                    in_substitution=false
+                    in_substitution=0
                 fi
             fi
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle process substitution <(...) and >(...)
+        if [[ ( "$char" == '<' || "$char" == '>' ) && "${cmd:i+1:1}" == '(' ]] && (( ! in_process_sub )); then
+            in_process_sub=1
+            paren_depth=1
+            word+="$char("
+            prev_char='('
+            ((i += 2))
+            continue
+        fi
+        
+        # Track parentheses depth inside <(...) or >(...) process substitution
+        if (( in_process_sub )); then
+            word+="$char"
+            if [[ "$char" == '(' ]]; then
+                ((paren_depth++))
+            elif [[ "$char" == ')' ]]; then
+                ((paren_depth--))
+                if (( paren_depth == 0 )); then
+                    in_process_sub=0
+                fi
+            fi
+            prev_char="$char"
             ((i++))
             continue
         fi
         
         # Regular character - add to word and continue
         word+="$char"
+        prev_char="$char"
         ((i++))
     done
     

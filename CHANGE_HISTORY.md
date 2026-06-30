@@ -3,8 +3,16 @@
 
 ## 26.6.30
 
-* **BugFix: Command Substitution in Executable Paths** - Fixed command pre-validation for commands whose first word contains `$(...)`
-* **Added Regression Test** - Added portable Linux test coverage for command-substitution path handling
+* **Enhanced Word Extraction Parser** - Replaced simple `read -ra` word splitting with bash syntax-aware character-by-character parser
+  * Now properly handles command substitution `$(...)` with parenthesis depth tracking
+  * Supports backtick command substitution `` `...` ``
+  * Respects single quotes `'...'` and double quotes `"..."` with separate state tracking
+  * Handles process substitution `<(...)` and `>(...)` with parenthesis nesting
+  * Properly processes escaped characters via backslash escaping
+  * Supports complex parameter expansion patterns `${VAR}`, `${VAR:offset}`, `${VAR#pattern}`, etc.
+  * Fixed critical bug with boolean variable handling causing "1: command not found" errors
+  * Fixed regex syntax error in process substitution detection pattern
+* **Test Updates** - Added 18 subshell test cases with 12 new edge case variations
 
 ## 26.6.26
 
