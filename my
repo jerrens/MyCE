@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.6.30
+__Version=26.7.6
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -1689,12 +1689,14 @@ function find_and_run_cmd() {
         # Extract named parameters (key=value or key:value) from args
         # Must be done before positional arg processing to reduce args count
         local new_args=()
+        declare -A named_param_delimiters  # Track the delimiter used for each parameter
         for arg in "${args[@]}"; do
             # Match key=value or key:value patterns (word chars only, not $1-style)
             # Supports quoted values: key="value with spaces" or key='value'
-            if [[ "$arg" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)[:=](.*)$ ]]; then
+            if [[ "$arg" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)([:=])(.*)$ ]]; then
                 local param_name="${BASH_REMATCH[1]}"
-                local param_value="${BASH_REMATCH[2]}"
+                local param_delim="${BASH_REMATCH[2]}"
+                local param_value="${BASH_REMATCH[3]}"
                 
                 # Handle quoted values (both single and double quotes)
                 if [[ "$param_value" =~ ^\"(.*)\"$ ]] || [[ "$param_value" =~ ^\'(.*)\'$ ]]; then
@@ -1702,7 +1704,8 @@ function find_and_run_cmd() {
                 fi
                 
                 named_params["$param_name"]="$param_value"
-                log 2 "Extracted named param: $param_name='$param_value'"
+                named_param_delimiters["$param_name"]="$param_delim"
+                log 2 "Extracted named param: $param_name$param_delim$param_value"
             else
                 # Not a named param, keep in args array
                 new_args+=("$arg")
@@ -1893,9 +1896,10 @@ function find_and_run_cmd() {
         local unconsumed_named_args=()
         for param_name in "${!named_params[@]}"; do
             if [[ -z "${referenced_names[$param_name]}" ]]; then
-                # This named param was not consumed, add it back to args
-                unconsumed_named_args+=("${param_name}=${named_params[$param_name]}")
-                log 2 "Appending unconsumed named param: ${param_name}=${named_params[$param_name]}"
+                # This named param was not consumed, add it back to args with original delimiter
+                local param_delim="${named_param_delimiters[$param_name]}"
+                unconsumed_named_args+=("${param_name}${param_delim}${named_params[$param_name]}")
+                log 2 "Appending unconsumed named param: ${param_name}${param_delim}${named_params[$param_name]}"
             fi
         done
 

@@ -1,6 +1,12 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.7.6
+
+* **BugFix: Named Parameter Delimiter Preservation** - When a named parameter (e.g. `key:value`) is not referenced in the command definition, it was being reconstructed with `=` instead of the original delimiter
+  * Arguments using `:` delimiter (e.g. `my artisan log:test-prints`) now correctly pass through as `log:test-prints` instead of `log=test-prints`
+  * The original delimiter (`:` or `=`) is now captured during argument extraction and preserved when passing unconsumed parameters through to the underlying command
+
 ## 26.6.30
 
 * **Enhanced Word Extraction Parser** - Replaced simple `read -ra` word splitting with bash syntax-aware character-by-character parser

@@ -1,0 +1,25 @@
+[namedparam]
+# Test named parameter delimiter preservation (:= vs =)
+# Commands that reference named parameters
+refSingleColon=echo referenced:${action}
+refSingleEquals=echo referenced=${action}
+refMultiColon=echo ${action}:${target}:done
+refMultiEquals=echo ${action}=${target}=done
+refMixed=echo ${action}:${target}
+
+# Commands that DON'T reference parameters (should pass through unchanged)
+passthrough=echo no-substitution-here
+passthroughEcho=echo "Original command"
+
+# Commands with some referenced, some not
+refPartial=echo Referenced:${action}
+refPartialEquals=echo Referenced=${action}
+refPartialMulti=echo Action:${action} Command: passthrough
+refPartialMultiEquals=echo Action=${action} Command: passthrough
+
+# Commands with multiple same parameter
+refDuplicate=echo ${action}-then-${action}
+
+# Commands with parameter in middle and end of command
+refMiddle=echo ${action} middle-text end
+refEnd=echo start middle ${action}
