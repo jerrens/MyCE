@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.6.26
+__Version=26.7.8
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -138,6 +138,162 @@ function log() {
     fi
 }
 
+# Helper function to extract the first word from a command string
+# Handles: quoted strings, command substitutions $(...) and `...`, 
+# process substitution <(...) and >(...), escaped spaces, and complex expansions
+__extract_first_word() {
+    local cmd="$1"
+    local word=""
+    local i=0
+    local len=${#cmd}
+    local in_substitution=0
+    local paren_depth=0
+    local in_single_quote=0
+    local in_double_quote=0
+    local in_backtick=0
+    local in_process_sub=0
+    local prev_char=""
+    
+    while (( i < len )); do
+        local char="${cmd:i:1}"
+        
+        # If we hit whitespace and we have a word and are not in any special context, we're done
+        if [[ "$char" =~ [[:space:]] ]] && [[ -n "$word" ]] && \
+           (( ! in_substitution )) && (( ! in_single_quote )) && (( ! in_double_quote )) && \
+           (( ! in_backtick )) && (( ! in_process_sub )); then
+            echo "$word"
+            return
+        fi
+        
+        # Skip leading whitespace if no word yet
+        if [[ "$char" =~ [[:space:]] ]] && [[ -z "$word" ]]; then
+            ((i++))
+            continue
+        fi
+        
+        # Handle escaped characters (backslash escapes the next character)
+        if [[ "$prev_char" == '\' ]] && (( ! in_single_quote )); then
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle single quotes (nothing special inside, including no escaping)
+        if [[ "$char" == "'" ]] && (( ! in_double_quote )) && (( ! in_backtick )); then
+            in_single_quote=$(( ! in_single_quote ))
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # If in single quotes, just add the character
+        if (( in_single_quote )); then
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle double quotes
+        if [[ "$char" == '"' ]] && (( ! in_backtick )); then
+            in_double_quote=$(( ! in_double_quote ))
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # If in double quotes, add character (but still track special syntax inside)
+        if (( in_double_quote )); then
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle backtick command substitution `...`
+        if [[ "$char" == '`' ]]; then
+            in_backtick=$(( ! in_backtick ))
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # If in backtick, add character
+        if (( in_backtick )); then
+            word+="$char"
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle command substitution $(...) 
+        if [[ "$char" == '$' && "${cmd:i+1:1}" == '(' ]] && (( ! in_substitution )); then
+            in_substitution=1
+            paren_depth=1
+            word+='$('
+            prev_char='('
+            ((i += 2))
+            continue
+        fi
+        
+        # Track parentheses depth inside $(...) substitution
+        if (( in_substitution )); then
+            word+="$char"
+            if [[ "$char" == '(' ]]; then
+                ((paren_depth++))
+            elif [[ "$char" == ')' ]]; then
+                ((paren_depth--))
+                if (( paren_depth == 0 )); then
+                    in_substitution=0
+                fi
+            fi
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Handle process substitution <(...) and >(...)
+        if [[ ( "$char" == '<' || "$char" == '>' ) && "${cmd:i+1:1}" == '(' ]] && (( ! in_process_sub )); then
+            in_process_sub=1
+            paren_depth=1
+            word+="$char("
+            prev_char='('
+            ((i += 2))
+            continue
+        fi
+        
+        # Track parentheses depth inside <(...) or >(...) process substitution
+        if (( in_process_sub )); then
+            word+="$char"
+            if [[ "$char" == '(' ]]; then
+                ((paren_depth++))
+            elif [[ "$char" == ')' ]]; then
+                ((paren_depth--))
+                if (( paren_depth == 0 )); then
+                    in_process_sub=0
+                fi
+            fi
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+        
+        # Regular character - add to word and continue
+        word+="$char"
+        prev_char="$char"
+        ((i++))
+    done
+    
+    # Return whatever word we've collected
+    if [[ -n "$word" ]]; then
+        echo "$word"
+    fi
+}
+
 while getopts 'dvc' option; do
     # echo "Option: ${option}"
     case ${option} in
@@ -235,16 +391,14 @@ function runCMD() {
 
     # Pre-check the first command word to provide a friendly message before eval.
     # Skip leading KEY=value tokens and allow subshell/arithmetic forms starting with '('.
-    local -a __words
-    read -ra __words <<< "$cmd_string"
-    local __cmd_word=""
-    local __w
-    for __w in "${__words[@]}"; do
-        if [[ "$__w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-            continue
-        fi
-        __cmd_word="$__w"
-        break
+    local __cmd_word
+    __cmd_word=$(__extract_first_word "$cmd_string")
+    
+    # Skip non-command-word tokens (e.g., KEY=value assignments)
+    while [[ "$__cmd_word" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do
+        # This word is an assignment, skip it and find the next word
+        local remainder="${cmd_string#*$__cmd_word}"
+        __cmd_word=$(__extract_first_word "$remainder")
     done
 
     if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]]; then
@@ -253,9 +407,18 @@ function runCMD() {
         if [[ "$__cmd_word" == */* ]] || [[ "$__cmd_word" == ~* ]]; then
             # Expand tilde and check if file exists and is executable
             local __expanded_path="${__cmd_word/\~/$HOME}"
-            if [[ ! -x "$__expanded_path" ]]; then
-                log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
-                return 127
+            
+            # If the path contains unevaluated variables/substitutions, evaluate it safely
+            if [[ "$__expanded_path" == *\$* ]]; then
+                __expanded_path=$(eval echo "$__expanded_path" 2>/dev/null) || __expanded_path=""
+            fi
+            
+            # Only validate if we have a concrete path (no unevaluated variables)
+            if [[ -n "$__expanded_path" ]] && [[ ! "$__expanded_path" == *\$* ]]; then
+                if [[ ! -x "$__expanded_path" ]]; then
+                    log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
+                    return 127
+                fi
             fi
         elif ! type -t "$__cmd_word" >/dev/null 2>&1; then
             log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
@@ -1511,7 +1674,7 @@ function find_and_run_cmd() {
         fi
 
         binary_cmd="$foundKey_value"
-        local max_loops=15
+        local max_loops=50
 
         # Replace any variables found in binary_cmd with their values
 
@@ -1526,12 +1689,14 @@ function find_and_run_cmd() {
         # Extract named parameters (key=value or key:value) from args
         # Must be done before positional arg processing to reduce args count
         local new_args=()
+        declare -A named_param_delimiters  # Track the delimiter used for each parameter
         for arg in "${args[@]}"; do
             # Match key=value or key:value patterns (word chars only, not $1-style)
             # Supports quoted values: key="value with spaces" or key='value'
-            if [[ "$arg" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)[:=](.*)$ ]]; then
+            if [[ "$arg" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)([:=])(.*)$ ]]; then
                 local param_name="${BASH_REMATCH[1]}"
-                local param_value="${BASH_REMATCH[2]}"
+                local param_delim="${BASH_REMATCH[2]}"
+                local param_value="${BASH_REMATCH[3]}"
                 
                 # Handle quoted values (both single and double quotes)
                 if [[ "$param_value" =~ ^\"(.*)\"$ ]] || [[ "$param_value" =~ ^\'(.*)\'$ ]]; then
@@ -1539,7 +1704,8 @@ function find_and_run_cmd() {
                 fi
                 
                 named_params["$param_name"]="$param_value"
-                log 2 "Extracted named param: $param_name='$param_value'"
+                named_param_delimiters["$param_name"]="$param_delim"
+                log 2 "Extracted named param: $param_name$param_delim$param_value"
             else
                 # Not a named param, keep in args array
                 new_args+=("$arg")
@@ -1724,15 +1890,17 @@ function find_and_run_cmd() {
         # Remove the escaped references to allow passing through
         binary_cmd="${binary_cmd//\\\$/$}"
         log 2 "Expanded command to be executed:\n    $binary_cmd\n"
+        log 3 "Loops Taken: $loopCount"
 
         # Handle unconsumed named parameters
         # Any named params that weren't referenced in the command should be passed through
         local unconsumed_named_args=()
         for param_name in "${!named_params[@]}"; do
             if [[ -z "${referenced_names[$param_name]}" ]]; then
-                # This named param was not consumed, add it back to args
-                unconsumed_named_args+=("${param_name}=${named_params[$param_name]}")
-                log 2 "Appending unconsumed named param: ${param_name}=${named_params[$param_name]}"
+                # This named param was not consumed, add it back to args with original delimiter
+                local param_delim="${named_param_delimiters[$param_name]}"
+                unconsumed_named_args+=("${param_name}${param_delim}${named_params[$param_name]}")
+                log 2 "Appending unconsumed named param: ${param_name}${param_delim}${named_params[$param_name]}"
             fi
         done
 
