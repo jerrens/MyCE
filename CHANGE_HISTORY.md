@@ -1,6 +1,10 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.7.8
+
+* Increased variable substitution max loop count to avoid claiming infinite loop detection on complex/long commands
+
 ## 26.7.6
 
 * **BugFix: Named Parameter Delimiter Preservation** - When a named parameter (e.g. `key:value`) is not referenced in the command definition, it was being reconstructed with `=` instead of the original delimiter
