@@ -40,6 +40,7 @@ Running `my server.start` will execute docker-compose up.
 - **Merged Configurations**: Reads `.myCommands` files from the root directory down to the present working directory, merging them to build a complete command set. If duplicates are found, the command closest to the current directory takes precedence.
 - **Sectioned Commands**: Uses INI-style sections in `.myCommands` files to organize and access commands with dot-delimited syntax. This allows grouping related commands for better clarity and organization:
 - **Positional Args**: Values within the `.myCommands` file can use positional argument references (ie $1, $2, ${3}), reference all arguments with $@ or $*, or reference remaining (non-referenced) arguments with $@+ or $*+.
+- **Nested Command Invocation**: Command values can call another MyCE key inline using `${key args...}` for cleaner alias composition without explicitly calling `my`.
 - **Named Parameters**: Commands can accept named parameters using `key=value` or `key:value` syntax, referenced with `$name` or `${name:-default}` patterns for cleaner, more maintainable command definitions.
 - **Default Variable Values**: Default values for variables may be set using the following syntax: `${1:-defaultValue}` or `${CONST:-defaultValue}`
 - **Argument Passing**: Additional arguments provided after the command alias are passed directly to the underlying command. This enables dynamic behavior and flexible command usage.
@@ -318,6 +319,38 @@ convert=echo "Converting $1 to $format at $quality quality"
 >$ my file.convert input.jpg format=png quality=high
 Converting input.jpg to png at high quality
 ```
+
+#### Nested Command Invocation (`${key args...}`)
+
+You can invoke another MyCE key directly inside a command value by using `${key args...}`.
+This allows aliases to be composed without prefixing nested calls with `my`.
+
+**How it works:**
+
+- First token inside `${...}` is treated as the nested command key
+- Remaining tokens are treated as positional arguments for that nested command
+- Nested references can chain recursively
+- Recursion depth is bounded to avoid infinite loops from cyclical references
+- If a nested key is not found, the `${...}` expression is preserved and passed through to shell evaluation
+
+Example:
+
+```ini
+redir=echo "$1 World"
+indir=${redir Hello}
+```
+
+```bash
+>$ my redir Hello
+Hello World
+
+>$ my indir
+Hello World
+```
+
+> [!NOTE]
+> In sectioned configs, nested keys should use their full dotted name.
+> Example: use `${alias.redir Hello}` for a key defined as `redir` under `[alias]`.
 
 **Unconsumed Named Parameters Pass-Through:**
 

@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.7.8
+__Version=26.7.10
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -292,6 +292,408 @@ __extract_first_word() {
     if [[ -n "$word" ]]; then
         echo "$word"
     fi
+}
+
+# Parses content inside ${...} and determines if it is a MyCE nested invocation.
+# Nested invocation form: ${commandKey arg1 arg2}
+# Sets globals:
+#   __nested_invocation_detected (true/false)
+#   __nested_invocation_cmd
+#   __nested_invocation_args
+declare -g __nested_invocation_detected="false"
+declare -g __nested_invocation_cmd=""
+declare -g __nested_invocation_args=""
+function __parse_nested_invocation_content() {
+    local content="$1"
+
+    __nested_invocation_detected="false"
+    __nested_invocation_cmd=""
+    __nested_invocation_args=""
+
+    local i=0
+    local len=${#content}
+    local in_single_quote=0
+    local in_double_quote=0
+    local in_backtick=0
+    local in_substitution=0
+    local in_process_sub=0
+    local paren_depth=0
+    local prev_char=""
+    local split_idx=-1
+
+    while (( i < len )); do
+        local char="${content:i:1}"
+
+        if [[ "$prev_char" == '\\' ]] && (( ! in_single_quote )); then
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if [[ "$char" == "'" ]] && (( ! in_double_quote )) && (( ! in_backtick )); then
+            in_single_quote=$(( ! in_single_quote ))
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if (( in_single_quote )); then
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if [[ "$char" == '"' ]] && (( ! in_backtick )); then
+            in_double_quote=$(( ! in_double_quote ))
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if (( in_double_quote )); then
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if [[ "$char" == '`' ]]; then
+            in_backtick=$(( ! in_backtick ))
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if (( in_backtick )); then
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if [[ "$char" == '$' && "${content:i+1:1}" == '(' ]] && (( ! in_substitution )); then
+            in_substitution=1
+            paren_depth=1
+            prev_char='('
+            ((i += 2))
+            continue
+        fi
+
+        if (( in_substitution )); then
+            if [[ "$char" == '(' ]]; then
+                ((paren_depth++))
+            elif [[ "$char" == ')' ]]; then
+                ((paren_depth--))
+                if (( paren_depth == 0 )); then
+                    in_substitution=0
+                fi
+            fi
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if [[ ( "$char" == '<' || "$char" == '>' ) && "${content:i+1:1}" == '(' ]] && (( ! in_process_sub )); then
+            in_process_sub=1
+            paren_depth=1
+            prev_char='('
+            ((i += 2))
+            continue
+        fi
+
+        if (( in_process_sub )); then
+            if [[ "$char" == '(' ]]; then
+                ((paren_depth++))
+            elif [[ "$char" == ')' ]]; then
+                ((paren_depth--))
+                if (( paren_depth == 0 )); then
+                    in_process_sub=0
+                fi
+            fi
+            prev_char="$char"
+            ((i++))
+            continue
+        fi
+
+        if [[ "$char" =~ [[:space:]] ]]; then
+            split_idx=$i
+            break
+        fi
+
+        prev_char="$char"
+        ((i++))
+    done
+
+    # No-arg form: ${key} with no space - also a valid nested invocation.
+    if (( split_idx < 0 )); then
+        if [[ "$content" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then
+            __nested_invocation_detected="true"
+            __nested_invocation_cmd="$content"
+            __nested_invocation_args=""
+        fi
+        return 0
+    fi
+
+    local cmd_part="${content:0:split_idx}"
+    local args_part="${content:split_idx}"
+
+    # Trim whitespace around pieces
+    cmd_part="${cmd_part#"${cmd_part%%[![:space:]]*}"}"
+    cmd_part="${cmd_part%"${cmd_part##*[![:space:]]}"}"
+    args_part="${args_part#"${args_part%%[![:space:]]*}"}"
+
+    # Command key shape: allow section.dot.key, underscore, digits, and hyphen
+    if [[ "$cmd_part" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then
+        __nested_invocation_detected="true"
+        __nested_invocation_cmd="$cmd_part"
+        __nested_invocation_args="$args_part"
+    fi
+}
+
+# Shared argument application results.
+declare -g __template_expanded_cmd=""
+declare -ga __template_remaining_positional=()
+declare -ga __template_unconsumed_named=()
+
+# Applies positional and named arguments to a template.
+# Args:
+#   $1: template string
+#   $2: append-through args to template output (true/false)
+#   $@: invocation args
+function __apply_args_to_template() {
+    local template="$1"
+    local append_through="${2:-false}"
+    shift 2
+    local args=("$@")
+    local positional_args=()
+    declare -A named_params
+    declare -A named_param_delimiters
+    declare -A referenced_names
+    local out="$template"
+    local max_arg_num=-1
+    declare -A referenced_positions
+
+    __template_remaining_positional=()
+    __template_unconsumed_named=()
+
+    # Extract named params first (key=value or key:value).
+    local arg
+    for arg in "${args[@]}"; do
+        # Named params must be plain identifiers; avoid matching shell expansions
+        # like $(...) or ${...} that may contain ':' and '=' characters.
+        if [[ "$arg" != *'$'* ]] && [[ "$arg" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)([:=])(.*)$ ]]; then
+            local param_name="${BASH_REMATCH[1]}"
+            local param_delim="${BASH_REMATCH[2]}"
+            local param_value="${BASH_REMATCH[3]}"
+
+            if [[ "$param_value" =~ ^\"(.*)\"$ ]] || [[ "$param_value" =~ ^\'(.*)\'$ ]]; then
+                param_value="${BASH_REMATCH[1]}"
+            fi
+
+            named_params["$param_name"]="$param_value"
+            named_param_delimiters["$param_name"]="$param_delim"
+        else
+            positional_args+=("$arg")
+        fi
+    done
+
+    args=("${positional_args[@]}")
+
+    # Positional substitutions: $1, ${1}, ${1:-default}
+    local i
+    for (( i=${#args[@]}; i>0; i-- )); do
+        local p_arg="${args[$i-1]}"
+
+        if [[ "$out" =~ (^|[^\\])(\$\{?($i)(}|:-[^}\"]*\}?)?) ]]; then
+            referenced_positions[$i]=1
+            if (( i > max_arg_num )); then
+                max_arg_num=$i
+            fi
+            out="${out//${BASH_REMATCH[2]}/$p_arg}"
+        fi
+    done
+
+    # Remaining positional refs: $@+, $*+, ${@+}, ${*+}
+    if [[ "$out" =~ (^|[^\\])\$(\{?[@*]\+\}?) ]]; then
+        local remaining_args_str=""
+        local idx
+        for ((idx = 1; idx <= ${#args[@]}; idx++)); do
+            if [[ -z "${referenced_positions[$idx]}" ]]; then
+                remaining_args_str+="${args[$idx-1]} "
+            fi
+        done
+        remaining_args_str="${remaining_args_str% }"
+
+        out="${out//\$@+/$remaining_args_str}"
+        out="${out//\$\*+/$remaining_args_str}"
+        out="${out//\$\{@+\}/$remaining_args_str}"
+        out="${out//\$\{*+\}/$remaining_args_str}"
+
+        max_arg_num=${#args[@]}
+    fi
+
+    # All positional refs: $@, $*, ${@}, ${*}
+    local all_args_str=""
+    if [[ "$out" =~ (^|[^\\])\$(\{)?[@*](\})?[^+] ]] || [[ "$out" =~ (^|[^\\])\$(\{)?[@*](\})?$ ]]; then
+        if [[ ${#args[@]} -gt 0 ]]; then
+            printf -v all_args_str '%s ' "${args[@]}"
+            all_args_str="${all_args_str% }"
+        fi
+
+        out="${out//\$\{@\}/$all_args_str}"
+        out="${out//\$@/$all_args_str}"
+        out="${out//\$\{\*\}/$all_args_str}"
+        out="${out//\$\*/$all_args_str}"
+
+        max_arg_num=${#args[@]}
+    fi
+
+    # Remaining positional args that would be left after top-level shifting.
+    # If no positional refs were used, all positional args remain available.
+    if (( max_arg_num < 0 )); then
+        __template_remaining_positional=("${args[@]}")
+    elif (( ${#args[@]} > max_arg_num )); then
+        for ((i = max_arg_num + 1; i <= ${#args[@]}; i++)); do
+            __template_remaining_positional+=("${args[$i-1]}")
+        done
+    fi
+
+    # Named substitutions: ${name:-default}, ${name}, $name
+    local param_name
+    for param_name in "${!named_params[@]}"; do
+        local param_value="${named_params[$param_name]}"
+        local escaped_value
+        escaped_value=$(printf '%s\n' "$param_value" | sed 's/[\/&]/\\&/g')
+
+        if [[ "$out" =~ \$\{$param_name:-[^}]*\} ]]; then
+            out=$(printf '%s\n' "$out" | sed "s/\\\${$param_name:-[^}]*}/$escaped_value/g")
+            referenced_names["$param_name"]=1
+        elif [[ "$out" =~ \$\{$param_name\} ]]; then
+            out=$(printf '%s\n' "$out" | sed "s/\\\${$param_name}/$escaped_value/g")
+            referenced_names["$param_name"]=1
+        elif [[ "$out" =~ \$$param_name([^a-zA-Z0-9_]|$) ]]; then
+            out=$(printf '%s\n' "$out" | sed "s/\\\$$param_name\\([^a-zA-Z0-9_]\\|$\)/$escaped_value\\1/g")
+            referenced_names["$param_name"]=1
+        fi
+    done
+
+    # Keep unconsumed named params for pass-through.
+    for param_name in "${!named_params[@]}"; do
+        if [[ -z "${referenced_names[$param_name]}" ]]; then
+            local param_delim="${named_param_delimiters[$param_name]}"
+            __template_unconsumed_named+=("${param_name}${param_delim}${named_params[$param_name]}")
+        fi
+    done
+
+    # Optionally append through-args directly to template output (used by nested).
+    # Always append remaining positional args so unreferenced args reach the target,
+    # e.g. ${test.zsh --test-file basic} must forward --test-file basic even if
+    # test.zsh has no $1/$2 placeholders.
+    if [[ "$append_through" == "true" ]]; then
+        if [[ ${#__template_remaining_positional[@]} -gt 0 ]]; then
+            local trailing_args_str=""
+            printf -v trailing_args_str '%s ' "${__template_remaining_positional[@]}"
+            trailing_args_str="${trailing_args_str% }"
+            out+=" $trailing_args_str"
+        fi
+
+        if [[ ${#__template_unconsumed_named[@]} -gt 0 ]]; then
+            local unconsumed_named_args_str=""
+            printf -v unconsumed_named_args_str '%s ' "${__template_unconsumed_named[@]}"
+            unconsumed_named_args_str="${unconsumed_named_args_str% }"
+            out+=" $unconsumed_named_args_str"
+        fi
+    fi
+
+    __template_expanded_cmd="$out"
+}
+
+# Backward-compatible wrapper for nested expansion path.
+declare -g __template_args_applied=""
+function __apply_positional_args_to_template() {
+    local template="$1"
+    shift
+    __apply_args_to_template "$template" "true" "$@"
+    __template_args_applied="$__template_expanded_cmd"
+}
+
+# Expands MyCE nested invocations in the form ${key args...}.
+# Missing keys are left unchanged so shell eval can handle them later if needed.
+declare -g __nested_expanded_cmd=""
+function __expand_nested_invocations() {
+    local input_cmd="$1"
+    local depth="${2:-0}"
+    local max_depth=20
+
+    if (( depth >= max_depth )); then
+        log 0 "Nested invocation depth exceeded (${max_depth}) while expanding: ${input_cmd}"
+        __nested_expanded_cmd="$input_cmd"
+        return 1
+    fi
+
+    local output=""
+    local i=0
+    local len=${#input_cmd}
+
+    while (( i < len )); do
+        if [[ "${input_cmd:i:2}" == '${' ]]; then
+            # If the $ is preceded by a backslash it is an escape sequence; leave it intact
+            # so the variable expansion loop (and ultimately eval) handles \${...} correctly.
+            if (( i > 0 )) && [[ "${input_cmd:i-1:1}" == '\' ]]; then
+                output+="${input_cmd:i:1}"
+                ((i++))
+                continue
+            fi
+            local start=$i
+            local j=$((i + 2))
+
+            # Find the first closing brace for this ${...} token.
+            while (( j < len )); do
+                if [[ "${input_cmd:j:1}" == '}' ]]; then
+                    break
+                fi
+                ((j++))
+            done
+
+            # Unclosed expression, append remainder unchanged.
+            if (( j >= len )); then
+                output+="${input_cmd:start}"
+                break
+            fi
+
+            local token="${input_cmd:start:j-start+1}"
+            local content="${input_cmd:start+2:j-start-2}"
+
+            __parse_nested_invocation_content "$content"
+            if [[ "$__nested_invocation_detected" == "true" ]] && findKey "$__nested_invocation_cmd"; then
+                local nested_template="$foundKey_value"
+                local nested_args=()
+
+                if [[ -n "$__nested_invocation_args" ]]; then
+                    # shellcheck disable=SC2206
+                    eval "nested_args=( $__nested_invocation_args )"
+                fi
+
+                __apply_positional_args_to_template "$nested_template" "${nested_args[@]}"
+                local replacement="$__template_args_applied"
+
+                __expand_nested_invocations "$replacement" $((depth + 1))
+                replacement="$__nested_expanded_cmd"
+
+                output+="$replacement"
+            else
+                # Not nested syntax (or key not found) - preserve as-is.
+                output+="$token"
+            fi
+
+            i=$((j + 1))
+            continue
+        fi
+
+        output+="${input_cmd:i:1}"
+        ((i++))
+    done
+
+    __nested_expanded_cmd="$output"
+    return 0
 }
 
 while getopts 'dvc' option; do
@@ -1676,162 +2078,22 @@ function find_and_run_cmd() {
         binary_cmd="$foundKey_value"
         local max_loops=50
 
-        # Replace any variables found in binary_cmd with their values
+        # Resolve MyCE nested invocation syntax: ${commandKey arg1 arg2}
+        # Example: indir=${redir Hello}
+        __expand_nested_invocations "$binary_cmd"
+        binary_cmd="$__nested_expanded_cmd"
 
-        # Handle positional args first
-        max_arg_num=-1
-        args=("$@")
-        declare -A referenced_positions  # Track which positions are referenced
-        declare -A named_params         # Track named parameters
-        declare -A referenced_names     # Track which named params are referenced
-        log 2 "Checking for positional args: $* (${#args[@]})"
+        # Replace positional/named references via shared helper.
+        __apply_args_to_template "$binary_cmd" "false" "$@"
+        binary_cmd="$__template_expanded_cmd"
 
-        # Extract named parameters (key=value or key:value) from args
-        # Must be done before positional arg processing to reduce args count
-        local new_args=()
-        declare -A named_param_delimiters  # Track the delimiter used for each parameter
-        for arg in "${args[@]}"; do
-            # Match key=value or key:value patterns (word chars only, not $1-style)
-            # Supports quoted values: key="value with spaces" or key='value'
-            if [[ "$arg" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)([:=])(.*)$ ]]; then
-                local param_name="${BASH_REMATCH[1]}"
-                local param_delim="${BASH_REMATCH[2]}"
-                local param_value="${BASH_REMATCH[3]}"
-                
-                # Handle quoted values (both single and double quotes)
-                if [[ "$param_value" =~ ^\"(.*)\"$ ]] || [[ "$param_value" =~ ^\'(.*)\'$ ]]; then
-                    param_value="${BASH_REMATCH[1]}"
-                fi
-                
-                named_params["$param_name"]="$param_value"
-                named_param_delimiters["$param_name"]="$param_delim"
-                log 2 "Extracted named param: $param_name$param_delim$param_value"
-            else
-                # Not a named param, keep in args array
-                new_args+=("$arg")
-            fi
-        done
-        args=("${new_args[@]}")
-        # Rebuild $@ to only contain positional args (without named params)
-        # This is necessary so that named params don't get double-passed
-        set -- "${args[@]}"
-        log 2 "After named param extraction, remaining positional args: ${#args[@]} - ($*)"
-
-        for ((i = ${#args[@]}; i > 0; i--)); do
-            arg=${args[$i-1]}
-            log 3 "i is ${i}, arg is ${arg}"
-
-            # Updated regex pattern to match: `$1`, `${1}`, and `${1:-Hello}` patterns
-            if [[ "$binary_cmd" =~ (^|[^\\])(\$\{?($i)(}|:-[^}\"]*\}?)?) ]]; then
-                log 1 "Positional Argument Match Results - [0]='${BASH_REMATCH[0]}'; [1]='${BASH_REMATCH[1]}'; [2]='${BASH_REMATCH[2]}'; [3]='${BASH_REMATCH[3]}'"
-                # Record this position as referenced
-                referenced_positions[$i]=1
-                if [ "${BASH_REMATCH[3]}" -gt "$max_arg_num" ]; then
-                    max_arg_num=${BASH_REMATCH[3]}
-                    log 3 "Highest positional arg found at $max_arg_num"
-                fi
-
-                log 2 "Replacing positional argument reference '${BASH_REMATCH[2]}' with '${arg}'"
-
-                # Check if there is a default value part like {$1:-DefaultVal}
-                binary_cmd=${binary_cmd//${BASH_REMATCH[2]}/$arg}
-
-                log 2 "    New:  $binary_cmd"
-            else
-                log 3 "No positional arg reference found for arg $i"
-            fi
-        done
-
-        # Handle $@+ and $*+ - remaining (non-referenced) positional arguments
-        # Build remaining args list (all args except those that were explicitly referenced)
-        if [[ "$binary_cmd" =~ (^|[^\\])\$(\{?[@*]\+\}?) ]]; then
-            log 2 "Found \$@+ or \$*+ reference - replacing with remaining (non-referenced) args"
-
-            # Build remaining args string (skip positions that were referenced)
-            local remaining_args_str=""
-            for ((idx = 1; idx <= ${#args[@]}; idx++)); do
-                if [[ -z "${referenced_positions[$idx]}" ]]; then
-                    remaining_args_str+="${args[$idx-1]} "
-                fi
-            done
-            remaining_args_str="${remaining_args_str% }"  # Remove trailing space
-
-            # Replace $@+ and $*+ patterns
-            binary_cmd="${binary_cmd//\$@+/$remaining_args_str}"
-            binary_cmd="${binary_cmd//\$\*+/$remaining_args_str}"
-            binary_cmd="${binary_cmd//\$\{@+\}/$remaining_args_str}"
-            binary_cmd="${binary_cmd//\$\{*+\}/$remaining_args_str}"
-
-            log 2 "    After \$@+ replacement: $binary_cmd"
-
-            # Mark all args as consumed (since we've now processed all remaining args)
-            max_arg_num=${#args[@]}
-        fi
-
-        # Handle $@ and $* - all positional arguments (unchanged by $@+ logic)
-        # These special variables represent all arguments and should consume all args
-        # Pattern matches: $@, ${@}, $*, ${*}, and variations (but not $@+, $*+, ${@+}, ${*+})
-        if [[ "$binary_cmd" =~ (^|[^\\])\$(\{)?[@*](\})?[^+] ]] || [[ "$binary_cmd" =~ (^|[^\\])\$(\{)?[@*](\})?$ ]]; then
-            log 2 "Found \$@ or \$* reference (not \$@+/\$*+) - replacing with all args"
-
-            # Build the args string from the original args array
-            local all_args_str=""
-            for arg in "${args[@]}"; do
-                all_args_str+="$arg "
-            done
-            all_args_str="${all_args_str% }"  # Remove trailing space
-
-            # Replace both $@ and $* patterns (with and without curly braces)
-            binary_cmd="${binary_cmd//\$\{@\}/$all_args_str}"
-            binary_cmd="${binary_cmd//\$@/$all_args_str}"
-            binary_cmd="${binary_cmd//\$\{\*\}/$all_args_str}"
-            binary_cmd="${binary_cmd//\$\*/$all_args_str}"
-
-            log 2 "    After \$@ replacement: $binary_cmd"
-
-            # Mark all args as consumed
-            max_arg_num=${#args[@]}
-        fi
-
-        # Shift args to the highest reference found
-        # Any remaining args will be left to pass on
-        if [ "$max_arg_num" -ne -1 ]; then
-            log 3 "Shifting args by $max_arg_num"
-            shift "$max_arg_num"
-        fi
+        # Rebuild remaining args from helper outputs so runCMD behavior stays unchanged.
+        local remaining_positional=("${__template_remaining_positional[@]}")
+        local unconsumed_named_args=("${__template_unconsumed_named[@]}")
+        set -- "${remaining_positional[@]}"
 
         log 3 "Remaining arguments: $*"
         log 3 "Current evolution of command: $binary_cmd"
-
-        # Handle named parameters: substitute only those that were extracted from arguments
-        # Don't scan the command for all $name patterns - only substitute known named params
-        log 2 "Substituting named parameters..."
-        for param_name in "${!named_params[@]}"; do
-            local param_value="${named_params[$param_name]}"
-            log 2 "Looking for named param: \$$param_name"
-            
-            # Escape special characters in param_value for sed replacement
-            local escaped_value=$(printf '%s\n' "$param_value" | sed 's/[\/&]/\\&/g')
-            
-            # Replace ${name:-default} pattern first (highest specificity)
-            if [[ "$binary_cmd" =~ \$\{$param_name:-[^}]*\} ]]; then
-                log 2 "Found named param '\${$param_name:-...}' in command, replacing with '$param_value'"
-                binary_cmd=$(printf '%s\n' "$binary_cmd" | sed "s/\\\${$param_name:-[^}]*}/$escaped_value/g")
-                referenced_names["$param_name"]=1
-            # Then try ${name} pattern
-            elif [[ "$binary_cmd" =~ \$\{$param_name\} ]]; then
-                log 2 "Found named param '\${$param_name}' in command, replacing with '$param_value'"
-                binary_cmd=$(printf '%s\n' "$binary_cmd" | sed "s/\\\${$param_name}/$escaped_value/g")
-                referenced_names["$param_name"]=1
-            # Finally try $name pattern (word boundary needed to avoid partial matches)
-            elif [[ "$binary_cmd" =~ \$$param_name([^a-zA-Z0-9_]|$) ]]; then
-                log 2 "Found named param '\$$param_name' in command, replacing with '$param_value'"
-                binary_cmd=$(printf '%s\n' "$binary_cmd" | sed "s/\\\$$param_name\\([^a-zA-Z0-9_]\\|$\)/$escaped_value\\1/g")
-                referenced_names["$param_name"]=1
-            else
-                log 3 "Named param '$param_name' not found in command"
-            fi
-        done
 
         local loopCount=0
         # Look for variable references in the command
@@ -1891,18 +2153,6 @@ function find_and_run_cmd() {
         binary_cmd="${binary_cmd//\\\$/$}"
         log 2 "Expanded command to be executed:\n    $binary_cmd\n"
         log 3 "Loops Taken: $loopCount"
-
-        # Handle unconsumed named parameters
-        # Any named params that weren't referenced in the command should be passed through
-        local unconsumed_named_args=()
-        for param_name in "${!named_params[@]}"; do
-            if [[ -z "${referenced_names[$param_name]}" ]]; then
-                # This named param was not consumed, add it back to args with original delimiter
-                local param_delim="${named_param_delimiters[$param_name]}"
-                unconsumed_named_args+=("${param_name}${param_delim}${named_params[$param_name]}")
-                log 2 "Appending unconsumed named param: ${param_name}${param_delim}${named_params[$param_name]}"
-            fi
-        done
 
         # Run the extracted command with the additional arguments
         __current_cmd="$cmd"  # Set global for DRYRUN metadata lookup

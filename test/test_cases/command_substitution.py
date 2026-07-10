@@ -4,6 +4,79 @@
 test_cases = {
     "# Word Extraction & Command Substitution": "Tests for various bash syntaxes in command paths",
 
+    # Nested invocation syntax tests: ${commandKey args...}
+    "alias.nestedSimple": {
+        "cmd": "alias.nestedSimple",
+        "see": "^Hello World$",
+        "description": "NESTED: ${key args} resolves nested key with positional arg"
+    },
+
+    "alias.nestedChainA": {
+        "cmd": "alias.nestedChainA",
+        "see": "^Nested chain works$",
+        "description": "NESTED: chained nested references resolve recursively"
+    },
+
+    "alias.nestedMissing": {
+        "cmd": "alias.nestedMissing",
+        "see": "bad substitution",
+        "description": "NESTED: missing nested key is preserved for shell expansion"
+    },
+
+    "alias.nestedLoopA": {
+        "cmd": "alias.nestedLoopA",
+        "see": "Nested invocation depth exceeded",
+        "description": "NESTED: recursive loop is bounded by depth guard"
+    },
+
+    "alias.nestedCallAllAt": {
+        "cmd": "alias.nestedCallAllAt",
+        "see": "^AT:one two three$",
+        "description": "NESTED: target alias expands $@ from multiple nested args"
+    },
+
+    "alias.nestedCallAllStar": {
+        "cmd": "alias.nestedCallAllStar",
+        "see": "^STAR:one two three$",
+        "description": "NESTED: target alias expands $* from multiple nested args"
+    },
+
+    "alias.nestedCallRemainingAt": {
+        "cmd": "alias.nestedCallRemainingAt",
+        "see": "^KEEP:two REST:one three four five$",
+        "description": "NESTED: target alias expands $@+ with explicit $2 reference"
+    },
+
+    "alias.nestedCallRemainingStar": {
+        "cmd": "alias.nestedCallRemainingStar",
+        "see": "^KEEP:two REST:one three four five$",
+        "description": "NESTED: target alias expands $*+ with explicit $2 reference"
+    },
+
+    "alias.nestedCallSecond": {
+        "cmd": "alias.nestedCallSecond",
+        "see": "^SECOND:two three$",
+        "description": "NESTED: target alias expands $2 and appends unreferenced trailing args"
+    },
+
+    "alias.nestedCallThree": {
+        "cmd": "alias.nestedCallThree",
+        "see": "^A:arg1 B:arg2 C:arg3$",
+        "description": "NESTED: target alias receives and expands 3 nested args"
+    },
+
+    "alias.nestedCallUnrefAppend": {
+        "cmd": "alias.nestedCallUnrefAppend",
+        "see": "^FIRST:one two three$",
+        "description": "NESTED: unreferenced args in target alias are appended to command tail"
+    },
+
+    "alias.nestedNamedCall": {
+        "cmd": "alias.nestedNamedCall",
+        "see": "^Output: Hello$",
+        "description": "NESTED: inline named parameters are available in target alias"
+    },
+
     # Test basic command substitution in command path using echo (portable across systems)
     "subshell.subshellPath": {
         "cmd": "subshell.subshellPath 'Command substitution works!'",
