@@ -23,3 +23,7 @@ refDuplicate=echo ${action}-then-${action}
 # Commands with parameter in middle and end of command
 refMiddle=echo ${action} middle-text end
 refEnd=echo start middle ${action}
+
+# Nested invocation and named parameters
+innerConsumeAction=echo nested:${action}
+nestedConsumeAction=${namedparam.innerConsumeAction}

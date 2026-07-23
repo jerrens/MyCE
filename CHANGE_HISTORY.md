@@ -1,6 +1,14 @@
 <!-- spell-checker:ignore MYCE -->
 # Change History
 
+## 26.7.10
+
+* **Nested Command Invocation Syntax** - Added support for invoking another MyCE key inline using `${key args...}` inside command values
+  * Enables concise alias chaining without needing to call `my` explicitly in the value (for example: `indir=${redir Hello}`)
+  * First token inside `${...}` is treated as the command key, remaining tokens are passed as positional arguments to that nested key
+  * Nested references resolve recursively with a depth guard to prevent infinite loops in cyclic definitions
+  * Missing nested keys are preserved as-is and passed through to shell evaluation
+
 ## 26.7.8
 
 * Increased variable substitution max loop count to avoid claiming infinite loop detection on complex/long commands

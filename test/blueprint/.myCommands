@@ -155,6 +155,39 @@ test_var_start=${variable.replacement.MYVALUE} is here
 
 [alias]
 merge=echo blueprint-default-value
+nestedSource=echo "$1 World"
+nestedSimple=${alias.nestedSource Hello}
+nestedChainA=${alias.nestedChainB}
+nestedChainB=${alias.nestedChainC}
+nestedChainC=echo Nested chain works
+nestedMissing=echo BEFORE-${unknownNestedKey Hello}-AFTER
+nestedLoopA=${alias.nestedLoopB}
+nestedLoopB=${alias.nestedLoopA}
+
+# Nested invocation argument expansion coverage
+nestedTargetAllAt=echo AT:$@
+nestedCallAllAt=${alias.nestedTargetAllAt one two three}
+
+nestedTargetAllStar=echo STAR:$*
+nestedCallAllStar=${alias.nestedTargetAllStar one two three}
+
+nestedTargetRemainingAt=echo KEEP:$2 REST:$@+
+nestedCallRemainingAt=${alias.nestedTargetRemainingAt one two three four five}
+
+nestedTargetRemainingStar=echo KEEP:$2 REST:$*+
+nestedCallRemainingStar=${alias.nestedTargetRemainingStar one two three four five}
+
+nestedTargetSecond=echo SECOND:$2
+nestedCallSecond=${alias.nestedTargetSecond one two three}
+
+nestedTargetThree=echo A:$1 B:$2 C:$3
+nestedCallThree=${alias.nestedTargetThree arg1 arg2 arg3}
+
+nestedTargetUnrefAppend=echo FIRST:$1
+nestedCallUnrefAppend=${alias.nestedTargetUnrefAppend one two three}
+
+nestedNamedTarget=echo "Output: $named"
+nestedNamedCall=${alias.nestedNamedTarget named:Hello}
 
 [subshell]
 # Word extraction tests - regression tests for __extract_first_word() function

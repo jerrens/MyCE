@@ -6,10 +6,16 @@ import glob
 import os
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 
 exe = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "my"))
+
+# Container execution settings
+DEFAULT_CONTAINER_IMAGE = "docker.io/ohmyzsh/zsh:latest"
+CONTAINER_WORKDIR = "/mnt/host"
+CONTAINER_SHELL = "zsh"
 
 # Array of command -> expected output pairs
 # Use {{TEST_DIR}} in test values for temp directory substitution
@@ -24,6 +30,119 @@ focus_run_test = [
     # This is useful during development to focus on a specific test or subset of tests without running the entire suite.
 
 ]
+
+
+def parse_container_args(argv):
+    """Parse --container/-c with optional image value.
+
+    Returns:
+        Tuple: (use_container: bool, container_image: str|None, remaining_args: list[str])
+    """
+    use_container = False
+    container_image = None
+    remaining_args = []
+    i = 0
+
+    while i < len(argv):
+        arg = argv[i]
+
+        if arg == "--container" or arg == "-c":
+            use_container = True
+            if i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+                container_image = argv[i + 1]
+                i += 1
+        elif arg.startswith("--container="):
+            use_container = True
+            container_image = arg.split("=", 1)[1].strip() or None
+        elif arg.startswith("-c="):
+            use_container = True
+            container_image = arg.split("=", 1)[1].strip() or None
+        else:
+            remaining_args.append(arg)
+
+        i += 1
+
+    return use_container, container_image, remaining_args
+
+
+def detect_container_engine():
+    """Return preferred container engine: podman, docker, or None."""
+    if shutil.which("podman"):
+        return "podman"
+    if shutil.which("docker"):
+        return "docker"
+    return None
+
+
+def run_test_runner_in_container(container_image, forwarded_args):
+    """Run this test runner inside a zsh container and return its exit code."""
+    engine = detect_container_engine()
+    if not engine:
+        print("Error: Neither 'podman' nor 'docker' is installed. Install podman (preferred) or docker.")
+        return 1
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(script_dir)
+    image = container_image or DEFAULT_CONTAINER_IMAGE
+
+    inner_args = " ".join(shlex.quote(arg) for arg in forwarded_args)
+    inner_command = (
+        "if ! command -v python3 >/dev/null 2>&1; then "
+        "echo 'python3 not found in container. Attempting install...' >&2; "
+        "if command -v apt-get >/dev/null 2>&1; then "
+        "apt-get update && apt-get install -y python3; "
+        "elif command -v apk >/dev/null 2>&1; then "
+        "apk add --no-cache python3; "
+        "elif command -v dnf >/dev/null 2>&1; then "
+        "dnf install -y python3; "
+        "elif command -v yum >/dev/null 2>&1; then "
+        "yum install -y python3; "
+        "elif command -v microdnf >/dev/null 2>&1; then "
+        "microdnf install -y python3; "
+        "else "
+        "echo 'Error: No supported package manager found to install python3.' >&2; "
+        "exit 127; "
+        "fi; "
+        "fi; "
+        "if ! command -v python3 >/dev/null 2>&1; then "
+        f"echo 'Error: python3 is not installed in container image: {image}' >&2; "
+        "exit 127; "
+        "fi; "
+        f"cd {CONTAINER_WORKDIR}/test && python3 test.py {inner_args}"
+    )
+
+    cmd = [
+        engine,
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "ZSH_DISABLE_COMPFIX=true",
+        "--volume",
+        f"{repo_root}:{CONTAINER_WORKDIR}",
+        "--volume",
+        f"{repo_root}/my:/usr/local/bin/my",
+        "--volume",
+        f"{os.path.expanduser('~/.myCommands')}:/root/.myCommands",
+        "--volume",
+        f"{repo_root}/auto-complete/_my.zsh:/root/.oh-my-zsh/custom/functions/_my",
+        "--workdir",
+        CONTAINER_WORKDIR,
+        image,
+        CONTAINER_SHELL,
+        "-c",
+        inner_command,
+    ]
+
+    if "-d" in forwarded_args or "--debug" in forwarded_args:
+        printable = " ".join(shlex.quote(part) for part in cmd)
+        print(f"Container mode enabled ({engine}) using image: {image}")
+        print(f">> Executing in container: {printable}")
+    else:
+        print(f"Container mode enabled ({engine}) using image: {image}")
+
+    result = subprocess.run(cmd)
+    return result.returncode
 
 
 # Dynamically load all test_cases dicts from files in test_cases directory
@@ -162,8 +281,10 @@ def run_tests(test_dir):
     return failed
 
 if __name__ == "__main__":
+    use_container, container_image, parsed_args = parse_container_args(sys.argv[1:])
+
     # Display help message
-    if "--help" in sys.argv or "-h" in sys.argv:
+    if "--help" in parsed_args or "-h" in parsed_args:
         help_text = """
 Usage: python test.py [OPTIONS]
 
@@ -171,6 +292,8 @@ Test runner for MyCE script. Executes test cases loaded from test_cases/*.py fil
 
 OPTIONS:
   --help, -h                    Show this help message and exit
+  --container, -c [IMAGE]       Run tests inside a zsh container
+                                Optional IMAGE default: docker.io/ohmyzsh/zsh:latest
   --test-file FILE1,FILE2,...   Load only specific test case files (comma-separated)
                                 File names without .py extension
   --filter REGEX, -f REGEX      Run only tests whose names match the given regex pattern
@@ -181,6 +304,13 @@ OPTIONS:
 EXAMPLES:
   # Run all test cases
   python test.py
+
+  # Run all test cases in the default zsh container
+  python test.py --container
+
+  # Run in a specific container image
+  python test.py --container docker.io/ohmyzsh/zsh:5.9
+  python test.py --container=docker.io/ohmyzsh/zsh:5.9
 
   # Run only basic test cases
   python test.py --test-file basic
@@ -198,7 +328,10 @@ EXAMPLES:
   # Run with debug output
   python test.py --debug
 
-  # Run specific tests with debug
+  # Run in container with debug output
+  python test.py --container --debug
+
+  # Specific tests in container with debug
   python test.py --test-file option_parsing --debug
 
   # Dry run: list tests without executing
@@ -209,6 +342,10 @@ EXAMPLES:
         print(help_text)
         sys.exit(0)
 
+    # If container mode is requested, run the full test runner inside the container.
+    if use_container:
+        sys.exit(run_test_runner_in_container(container_image, parsed_args))
+
     # Parse --test-file flag to only load specific test case files
     only_test_files = None
     test_filter = None
@@ -216,24 +353,24 @@ EXAMPLES:
 
     # Check for dryrun first - list tests and exit early
     for flag in ("-n", "--dryrun"):
-        if flag in sys.argv:
+        if flag in parsed_args:
             dryrun = True
             break
 
-    if "--test-file" in sys.argv:
-        idx = sys.argv.index("--test-file")
-        if idx + 1 < len(sys.argv):
+    if "--test-file" in parsed_args:
+        idx = parsed_args.index("--test-file")
+        if idx + 1 < len(parsed_args):
             # Split comma-separated file names and remove .py extension if present
-            files_arg = sys.argv[idx + 1]
+            files_arg = parsed_args[idx + 1]
             only_test_files = [f.replace('.py', '') for f in files_arg.split(',')]
             print(f"Loading only test cases from: {', '.join(only_test_files)}")
 
     # Parse -f/--filter flag to filter test cases by regex
     for flag in ("-f", "--filter"):
-        if flag in sys.argv:
-            idx = sys.argv.index(flag)
-            if idx + 1 < len(sys.argv):
-                test_filter = sys.argv[idx + 1]
+        if flag in parsed_args:
+            idx = parsed_args.index(flag)
+            if idx + 1 < len(parsed_args):
+                test_filter = parsed_args[idx + 1]
                 print(f"Filtering tests by regex: {test_filter}")
             break
 

@@ -221,6 +221,18 @@ test_cases = {
     },
     
     # ========== EDGE CASES AND COMBINATIONS ==========
+
+    # Nested invocation consumes one named param and preserves delimiter for unconsumed passthrough
+    "namedparam.nestedConsumeAction action:build mode:fast": {
+        "cmd": "namedparam.nestedConsumeAction action:build mode:fast",
+        "pwd": "projectNamedParam",
+        "see": "^nested:build mode:fast$",
+    },
+    "namedparam.nestedConsumeAction action=build mode=test": {
+        "cmd": "namedparam.nestedConsumeAction action=build mode=test",
+        "pwd": "projectNamedParam",
+        "see": "^nested:build mode=test$",
+    },
     
     # Multiple parameters of same type with different delimiters (all referenced)
     "namedparam.refMultiColon action:deploy target:live": {

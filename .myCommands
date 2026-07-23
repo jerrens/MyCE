@@ -33,3 +33,8 @@ zsh=${CONTAINER_ENGINE} run -it --rm """
     --workdir /mnt/host
     docker.io/ohmyzsh/zsh:${1:-latest} zsh
 """
+
+[test]
+zsh=${test} --container docker.io/ohmyzsh/zsh:latest
+; zsh.smoke=${test} --container docker.io/ohmyzsh/zsh:latest --test-file basic
+zsh.smoke=${test.zsh --test-file basic}
