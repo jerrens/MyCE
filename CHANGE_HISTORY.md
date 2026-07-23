@@ -1,4 +1,3 @@
-<!-- spell-checker:ignore MYCE -->
 # Change History
 
 ## 26.7.23
@@ -12,7 +11,7 @@
 ## 26.7.10
 
 * **Nested Command Invocation Syntax** - Added support for invoking another MyCE key inline using `${key args...}` inside command values
-  * Enables concise alias chaining without needing to call `my` explicitly in the value (for example: `indir=${redir Hello}`)
+  * Enables concise alias chaining without needing to call `my` explicitly in the value (for example: `indirect=${redirect Hello}`)
   * First token inside `${...}` is treated as the command key, remaining tokens are passed as positional arguments to that nested key
   * Nested references resolve recursively with a depth guard to prevent infinite loops in cyclic definitions
   * Missing nested keys are preserved as-is and passed through to shell evaluation
@@ -74,7 +73,7 @@
 ## 26.5.11
 
 * BugFix: Output of dryrun does not preserve escaped characters and ANSI control
-* Updated test.py to handle `cwd` as an argument to run_test function call and set in subprocess instead of chdir
+* Updated test.py to handle `cwd` as an argument to run_test function call and set in subprocess instead of `chdir`
 
 ## 26.4.30
 

@@ -172,6 +172,7 @@ __extract_first_word() {
         fi
         
         # Handle escaped characters (backslash escapes the next character)
+        # shellcheck disable=SC1003
         if [[ "$prev_char" == '\' ]] && (( ! in_single_quote )); then
             word+="$char"
             prev_char="$char"
@@ -234,6 +235,7 @@ __extract_first_word() {
         if [[ "$char" == '$' && "${cmd:i+1:1}" == '(' ]] && (( ! in_substitution )); then
             in_substitution=1
             paren_depth=1
+            # shellcheck disable=SC2016
             word+='$('
             prev_char='('
             ((i += 2))
@@ -324,6 +326,7 @@ function __parse_nested_invocation_content() {
     while (( i < len )); do
         local char="${content:i:1}"
 
+        # shellcheck disable=SC1003
         if [[ "$prev_char" == '\\' ]] && (( ! in_single_quote )); then
             prev_char="$char"
             ((i++))
@@ -634,9 +637,11 @@ function __expand_nested_invocations() {
     local len=${#input_cmd}
 
     while (( i < len )); do
+        # shellcheck disable=SC2016
         if [[ "${input_cmd:i:2}" == '${' ]]; then
             # If the $ is preceded by a backslash it is an escape sequence; leave it intact
             # so the variable expansion loop (and ultimately eval) handles \${...} correctly.
+            # shellcheck disable=SC1003
             if (( i > 0 )) && [[ "${input_cmd:i-1:1}" == '\' ]]; then
                 output+="${input_cmd:i:1}"
                 ((i++))
@@ -781,6 +786,7 @@ function runCMD() {
     # Before executing the command, run the shell rc file to support aliases and other configurations
     if [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ]; then
         log 1 "MYCE_RUNCOM: Sourcing shell's run commands file - '${MYCE_RUNCOM}'..."
+        # shellcheck source=/dev/null
         . "${MYCE_RUNCOM}" 2>/dev/null
         # Enable alias expansion if running under Bash and shopt is available
         if [ -n "$BASH_VERSION" ] && command -v shopt >/dev/null 2>&1; then
@@ -799,7 +805,7 @@ function runCMD() {
     # Skip non-command-word tokens (e.g., KEY=value assignments)
     while [[ "$__cmd_word" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do
         # This word is an assignment, skip it and find the next word
-        local remainder="${cmd_string#*$__cmd_word}"
+        local remainder="${cmd_string#*"$__cmd_word"}"
         __cmd_word=$(__extract_first_word "$remainder")
     done
 
@@ -830,6 +836,7 @@ function runCMD() {
 
     # Execute the command directly to preserve TTY context and allow ANSI color codes
     # NOTE: eval is intentional here — needed to expand aliases after sourcing the shell rc file.
+    # shellcheck disable=SC2294
     eval "$cmd_string" "$@"
     local exit_code=$?
 
@@ -1022,8 +1029,6 @@ declare -A commandDescriptions
 declare -A commandLocations
 # Tracks definition order for commands and conditional entries so newer definitions win
 declare -A commandOrder
-# Tracks the parse order of each conditional definition line
-declare -A conditionalDefOrder
 # Monotonic counter for parsed definitions and conditional entries
 declare -i __definition_order=0
 # Array of all file paths found in the directory tree (used for definition lookups)
@@ -1868,124 +1873,6 @@ function list_keys() {
     fi
 }
 
-# Reads an INI-style file and searches the valid sections and keys for a specific key
-#  All entries matching the given key will be stored in `foundDefs` array
-declare -a foundDefs=()
-function print_key_entries_in_file() {
-    local filePath=$1
-    local searchKey=$2
-    log 1 "Searching file: $1"
-
-    declare -a foundFileDefs=()
-
-    local section=""
-    local lineNumber=0
-    local pending_description=""
-    OLD_IFS=$IFS
-    while IFS= read -r line <&3 || [[ -n "$line" ]]; do
-        ((lineNumber++))  # Increment line number
-        # echo " Line1 - $line"
-
-        # Skip empty lines (but not comment lines yet - we need to check for descriptions)
-        if [[ "$line" =~ ^[[:space:]]*$ ]]; then
-            continue
-        fi
-
-        # Check for description comment (must be before general comment check)
-        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*description:[[:space:]]*(.*)$ ]]; then
-            pending_description="${BASH_REMATCH[1]}"
-            log 2 "    Found description: '$pending_description'"
-            continue
-        fi
-
-        # Skip comment lines (but not description comments which we already handled)
-        if [[ "$line" =~ ^[[:space:]]*# ]]; then
-            continue
-        fi
-
-        # Skip conditional control flow statements - must be before section header check
-        # since both use brackets
-        if [[ "$line" =~ ^[[:space:]]*\[IF[[:space:]]+(.+)\]$ ]] || \
-           [[ "$line" =~ ^[[:space:]]*\[ELSE[[:space:]]*IF[[:space:]]+(.+)\]$ ]] || \
-           [[ "$line" =~ ^[[:space:]]*\[ELSE\]$ ]] || \
-           [[ "$line" =~ ^[[:space:]]*\[FI\]$ ]]; then
-            log 2 "    Conditional control statement detected: ${line}"
-            # Reset pending description when entering a conditional
-            pending_description=""
-            continue
-        fi
-
-        # Check for section headers
-        if [[ "$line" =~ ^\[.*\]$ ]]; then
-            log 2 "    Section Header detected: ${line:1:-1}"
-            section=${line:1:-1}
-            # Reset pending description when entering a new section
-            pending_description=""
-            continue
-        fi
-
-        # Split the line into key and value
-        IFS='=' read -r key value <<< "$line"
-        # echo "     2 - $line"
-
-        # Trim whitespace from key
-        key="${key#"${key%%[![:space:]]*}"}"   # remove leading whitespace characters
-        key="${key%"${key##*[![:space:]]}"}"   # remove trailing whitespace characters
-        value="${value#"${value%%[![:space:]]*}"}"   # remove leading whitespace characters
-        value="${value%"${value##*[![:space:]]}"}"   # remove trailing whitespace characters
-        fullKey=$key
-        log 2 "      $key=$value"
-
-        # If section is not empty, prepend it to the key with an underscore
-        if [[ -n "$section" ]]; then
-            fullKey="${section}.${key}"
-            log 3 "        Full Key: ${fullKey}"
-        fi
-
-        # If this key is the one we're searching for, collect it
-        if [[ "$searchKey" == "$fullKey" ]]; then
-            log 2 "  Key Match @$lineNumber: $fullKey - ($value)"
-            # Use the description from THIS file's parse, not the global array
-            local desc="$pending_description"
-            if [[ -n "$section" ]]; then
-                entry="$filePath:$lineNumber|[${section}]⇒ ${key}||${desc}||${value}"
-                foundFileDefs+=("$entry")
-                foundDefs+=("$entry")
-            else
-                entry="$filePath:$lineNumber|${key}||${desc}||${value}"
-                foundFileDefs+=("$entry")
-                foundDefs+=("$entry")
-            fi
-            # Reset description after using it
-            pending_description=""
-        else
-            # Reset pending description if this key doesn't match (description doesn't apply)
-            pending_description=""
-        fi
-    done 3< <(cat "$1")
-    log 2 "" # Add some spacing in extra verbose mode
-    IFS=$OLD_IFS
-
-    if [[ $(type -t column) == "file" ]]; then
-        columnCMD='column -t -s "|"'
-    else
-        columnCMD="sed 's/|/\t/g'"
-    fi
-
-    # After collecting all lines, print the contents as a table using column
-    if ! (declare -p foundFileDefs 2>/dev/null | grep -q 'declare \-a') || [ ${#foundFileDefs[@]} -eq 0 ]; then
-        # Nothing found in this file
-        log 1 "  Nothing found\n"
-    else
-        # Definition was found
-        for line in "${foundFileDefs[@]}"; do
-            # Replace any line wrap chars with an escaped version for the print
-            log 1 "|${line//\\n/\\\\n}"
-        done | eval "${columnCMD}"
-        log 1 ""
-    fi
-}
-
 # Function to locate the given key from the ${MY_CUSTOM_FILE} files in the directory tree
 function get_key_definition() {
     local defKey=$1
@@ -2038,8 +1925,7 @@ function get_key_definition() {
         local lineNumber=0
         local file_section=""
         local in_conditional=false
-        local conditional_value=""
-        local conditional_line=0
+        # local conditional_line=0
         
         while IFS= read -r line || [[ -n "$line" ]]; do
             ((lineNumber++))
@@ -2056,7 +1942,7 @@ function get_key_definition() {
             # Check for conditional start/end
             if [[ "$line" =~ ^[[:space:]]*\[(IF|ELSE|FI|ELSE\ IF) ]]; then
                 in_conditional=true
-                conditional_line=$lineNumber
+                # conditional_line=$lineNumber
                 continue
             fi
             
@@ -2184,7 +2070,7 @@ function find_and_run_cmd() {
         local max_loops=50
 
         # Resolve MyCE nested invocation syntax: ${commandKey arg1 arg2}
-        # Example: indir=${redir Hello}
+        # Example: inDir=${reDir Hello}
         __expand_nested_invocations "$binary_cmd"
         binary_cmd="$__nested_expanded_cmd"
 
@@ -2357,7 +2243,7 @@ function update_script() {
     # Determine where we should install the update
     # If running this script in a dev env (running with `./my ...`), then we don't want to accidentally replace these dev changes with the version from the repo release
     # Expected location is typically: /usr/local/bin/my
-    exe_basename=$(basename $0 2> /dev/null) # Get the filename of the exe running
+    exe_basename=$(basename "$0" 2> /dev/null) # Get the filename of the exe running
     # Handle if not installed in a PATH location (running locally), by referencing the executing script
     install_path=$( which "${exe_basename}" 2> /dev/null )
     install_path=${install_path:-$0}
@@ -2429,7 +2315,7 @@ function update_script() {
     runCMD chmod a+x "${install_path}"
 
     # Determine installation auto-completion based on shell type
-    local shell_type src_file dest_file completion_dir
+    local src_file dest_file completion_dir
     if [[ $__Shell == "zsh" ]]; then
         src_file="/tmp/${archive_root}/auto-complete/_my.zsh"
         dest_file="/usr/local/share/zsh/site-functions/_my"
