@@ -1,0 +1,6 @@
+# .myCommands for nested directory
+
+[alias]
+nested_greeting=echo "Hello from nested main"
+shared=echo "Shared from nested main"
+nested_only=echo "defined in nested only"

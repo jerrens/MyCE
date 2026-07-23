@@ -1,0 +1,5 @@
+# .myCommands.local for nested directory - overrides
+
+[alias]
+nested_greeting=echo "Hello from nested local"
+shared=echo "Shared from nested local"

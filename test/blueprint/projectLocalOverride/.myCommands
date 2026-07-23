@@ -1,0 +1,11 @@
+# .myCommands for projectLocalOverride
+
+[alias]
+greeting=echo "Hello from main"
+local_only=echo "defined in main only"
+shared=echo "Shared from main"
+
+[vars]
+APP_NAME=MyApp
+ENV=production
+version=v1.0

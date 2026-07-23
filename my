@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.7.10
+__Version=26.7.23
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -1026,6 +1026,8 @@ declare -A commandOrder
 declare -A conditionalDefOrder
 # Monotonic counter for parsed definitions and conditional entries
 declare -i __definition_order=0
+# Array of all file paths found in the directory tree (used for definition lookups)
+declare -a file_paths
 
 # Global variable to track the current command being executed (for DRYRUN metadata lookup)
 declare -g __current_cmd=""
@@ -1393,14 +1395,27 @@ function load_my_custom_files() {
     conditionalDefinitions=()
     conditionalBlockOrder=()
     __definition_order=0
+    file_paths=()  # Clear the global file_paths array
 
     # Start in the current directory and move up the directory tree
-    declare -a file_paths
     dir=$(pwd)
 
     # Find all files in the directory tree
     log 1 "Searching for ${MY_CUSTOM_FILE} files in the directory tree..."
     while [ "$dir" != "/" ]; do
+        # Add .local files BEFORE main files so in reverse iteration, main is processed first, then .local (giving .local priority)
+        log 2 "Checking for local override file: ${MY_CUSTOM_FILE}.local"
+        if [[ -f "$dir/${MY_CUSTOM_FILE}.local" ]]; then
+            log 3 "  Found local override file!"
+            file_paths+=("$dir/${MY_CUSTOM_FILE}.local")
+        fi
+        # Try without the trailing 's' for legacy local file
+        log 2 "Checking for legacy local override file: ${MY_CUSTOM_FILE%?}.local"
+        if [[ -f "$dir/${MY_CUSTOM_FILE%?}.local" ]]; then
+            log 3 "  Found legacy local override file!"
+            file_paths+=("$dir/${MY_CUSTOM_FILE%?}.local")
+        fi
+        # Then add main file
         log 2 "Checking for file: ${MY_CUSTOM_FILE}"
         if [[ -f "$dir/${MY_CUSTOM_FILE}" ]]; then
             log 3 "  Found file!"
@@ -1415,8 +1430,15 @@ function load_my_custom_files() {
         dir=$(dirname "$dir")
     done
 
-    # Always process the home dir file first (if it exists)
+    # Always process the home dir files
     # Support both the current and legacy file name for backwards compatibility
+    # Add .local override file BEFORE main home file
+    if [ -f "${HOME}/${MY_CUSTOM_FILE}.local" ]; then
+        file_paths+=("${HOME}/${MY_CUSTOM_FILE}.local")
+    elif [ -f "${HOME}/${MY_CUSTOM_FILE%?}.local" ]; then
+        file_paths+=("${HOME}/${MY_CUSTOM_FILE%?}.local")
+    fi
+    # Then add main home file
     if [ -f "${HOME}/${MY_CUSTOM_FILE}" ]; then
         file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
     elif [ -f "${HOME}/${MY_CUSTOM_FILE%?}" ]; then
@@ -1977,55 +1999,145 @@ function get_key_definition() {
         return 1
     fi
 
-    # Load files first to populate commandDescriptions array
+    # Load files to populate commands and conditionals arrays
     load_my_custom_files > /dev/null 2>&1
+    evaluate_conditionals > /dev/null 2>&1
 
-    # NOTE: Uses the same logic to traverse the directory tree for command files,
-    #   but looks for any occurrence of the key instead of the typical LIFO processing
-
-    # Start in the current directory and move up the directory tree
-    declare -a file_paths
-    dir=$(pwd)
-
-    # Find all files in the directory tree
-    while [ "$dir" != "/" ]; do
-        if [[ -f "$dir/${MY_CUSTOM_FILE}" ]]; then
-            file_paths+=("$dir/${MY_CUSTOM_FILE}")
-        fi
-        # Try without the trailing 's' for backwards compatibility
-        if [[ -f "$dir/${MY_CUSTOM_FILE%?}" ]]; then
-            file_paths+=("$dir/${MY_CUSTOM_FILE%?}")
-        fi
-        dir=$(dirname "$dir")
-    done
-
-    # Always process the home dir file first (if it exists)
-    if [ -f "${HOME}/${MY_CUSTOM_FILE}" ]; then
-        file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
-
-        # This may cause a duplicate entry (if executed in a subdirectory of ~)
-        # If this re-orders the list, then consider using https://stackoverflow.com/a/54797762/2136313 method
-        # Remove only consecutive duplicate entries (preserve order, allow non-consecutive duplicates)
-        unique_file_paths=()
-        prev=""
-        for fp in "${file_paths[@]}"; do
-            if [[ "$fp" != "$prev" ]]; then
-                unique_file_paths+=("$fp")
+    # Check if the key exists (in either commands or conditionals)
+    if [[ ! -v commands["$defKey"] ]]; then
+        # Check if it exists in conditionals
+        local found_in_conditionals=false
+        for block_id in "${conditionalBlockOrder[@]}"; do
+            local defs="${conditionalDefinitions["$block_id"]}"
+            if [[ "$defs" =~ $defKey ]]; then
+                found_in_conditionals=true
+                break
             fi
-            prev="$fp"
         done
-        file_paths=("${unique_file_paths[@]}")
-        unset unique_file_paths
-        unset prev
+        
+        if [[ "$found_in_conditionals" == "false" ]]; then
+            log 1 "Key not found: $defKey\n"
+            return 1
+        fi
     fi
 
-    # Process the files in reverse order
-    for (( idx=${#file_paths[@]}-1 ; idx>=0 ; idx-- )) ; do
-        print_key_entries_in_file "${file_paths[idx]}" "$defKey"
+    # Extract section and key from the defKey (format: "section.key" or just "key")
+    local section=""
+    local key="$defKey"
+    if [[ "$defKey" =~ ^(.+)\.([^.]+)$ ]]; then
+        section="${BASH_REMATCH[1]}"
+        key="${BASH_REMATCH[2]}"
+    fi
+
+    # Re-parse all files to find all locations where this key appears
+    declare -a definitions
+    
+    for filepath in "${file_paths[@]}"; do
+        [[ ! -f "$filepath" ]] && continue
+        
+        local lineNumber=0
+        local file_section=""
+        local in_conditional=false
+        local conditional_value=""
+        local conditional_line=0
+        
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            ((lineNumber++))
+            
+            # Skip empty lines and comments
+            if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
+                # Preserve description comments for non-conditional entries
+                if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*description:[[:space:]]*(.*)$ ]]; then
+                    :  # Description will be picked up from commandDescriptions
+                fi
+                continue
+            fi
+            
+            # Check for conditional start/end
+            if [[ "$line" =~ ^[[:space:]]*\[(IF|ELSE|FI|ELSE\ IF) ]]; then
+                in_conditional=true
+                conditional_line=$lineNumber
+                continue
+            fi
+            
+            # Check for section header [section]
+            if [[ "$line" =~ ^[[:space:]]*\[([^\]]+)\][[:space:]]*$ ]]; then
+                file_section="${BASH_REMATCH[1]}"
+                continue
+            fi
+            
+            # Parse key=value pairs
+            if [[ "$line" =~ ^[[:space:]]*([^=]+)=(.*)$ ]]; then
+                local line_key="${BASH_REMATCH[1]}"
+                line_key="${line_key#"${line_key%%[![:space:]]*}"}"  # Trim leading
+                line_key="${line_key%"${line_key##*[![:space:]]}"}"  # Trim trailing
+                
+                local line_value="${BASH_REMATCH[2]}"
+                
+                # Check if this matches the key we're looking for
+                if [[ "$line_key" == "$key" ]]; then
+                    # Check if section matches (if a section was specified)
+                    if [[ -z "$section" || "$file_section" == "$section" ]]; then
+                        local desc="${commandDescriptions["$defKey"]:-}"
+                        
+                        # Format the definition entry
+                        local entry
+                        if [[ -n "$file_section" ]]; then
+                            entry="$filepath:$lineNumber|[$file_section]⇒ $line_key||$desc||$line_value"
+                        else
+                            entry="$filepath:$lineNumber|$line_key||$desc||$line_value"
+                        fi
+                        definitions+=("$entry")
+                    fi
+                fi
+            fi
+        done < "$filepath"
     done
 
-    if [[ -z ${file_paths[0]} ]]; then
-        log 0 "No ${MY_CUSTOM_FILE} files were found in the directory tree"
+    # Also look for the key in conditional definitions and add them
+    for block_id in "${conditionalBlockOrder[@]}"; do
+        local condition="${conditionalConditions["$block_id"]}"
+        local defs="${conditionalDefinitions["$block_id"]}"
+        local block_file="${block_id%:*}"
+        local block_line="${block_id##*:}"
+        
+        # Parse the conditional definitions to find our key
+        while IFS= read -r def_line; do
+            [[ -z "$def_line" ]] && continue
+            
+            # Parse "order	key=value" format
+            if [[ "$def_line" =~ ^[0-9]+[[:space:]]+([^=]+)=(.*)$ ]]; then
+                local def_key="${BASH_REMATCH[1]}"
+                local def_value="${BASH_REMATCH[2]}"
+                
+                if [[ "$def_key" == "$defKey" ]]; then
+                    # Extract section and key
+                    local cond_section=""
+                    local cond_key="$def_key"
+                    if [[ "$def_key" =~ ^(.+)\.([^.]+)$ ]]; then
+                        cond_section="${BASH_REMATCH[1]}"
+                        cond_key="${BASH_REMATCH[2]}"
+                    fi
+                    
+                    # Get description if available
+                    local cond_desc="${commandDescriptions["$defKey"]:-}"
+                    
+                    # Format: show condition in the location part
+                    local entry
+                    if [[ -n "$cond_section" ]]; then
+                        entry="$block_file:$block_line|[$cond_section]⇒ $cond_key||$cond_desc||$def_value"
+                    else
+                        entry="$block_file:$block_line|$cond_key||$cond_desc||$def_value"
+                    fi
+                    definitions+=("$entry")
+                fi
+            fi
+        done <<< "$defs"
+    done
+
+    # Display all definitions found (in reverse order: root → PWD)
+    if [[ ${#definitions[@]} -eq 0 ]]; then
+        log 1 "No definitions found for: $defKey\n"
         return 1
     fi
 
@@ -2035,18 +2147,11 @@ function get_key_definition() {
         columnCMD="sed 's/|/\t/g'"
     fi
 
-    # After collecting all lines, print the contents as a table using column
-    if ! (declare -p foundDefs 2>/dev/null | grep -q 'declare \-a') || [ ${#foundDefs[@]} -eq 0 ]; then
-        log 1 "  Not found\n"
-    else
-        log 1 "Definitions Found:\n$(printf '%*s' 100 | tr ' ' '-')"
-        for line in "${foundDefs[@]}"; do
-            # Replace any line wrap chars with an escaped version for the print
-            log 0 "${line//\\n/\\\\n}"
-        done | eval "${columnCMD}"
-    fi
-
-    log 1 "\n\e[3m** NOTE: If multiple definitions were found, the last definition shown is used\e[0m\n"
+    # Output all definitions in reverse order (root first)
+    for (( i=${#definitions[@]}-1 ; i>=0 ; i-- )) ; do
+        entry="${definitions[$i]}"
+        log 0 "${entry//\\n/\\\\n}" | eval "${columnCMD}"
+    done
 
     log 2 "" # Add spacing in verbose mode
     return 0
