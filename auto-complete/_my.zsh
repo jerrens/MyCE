@@ -51,7 +51,7 @@ _my() {
                     ;;
                 list)
                     log "list opts"
-                    compadd -- -l -a -d
+                    compadd -- -l -a -d -v
                     ;;
             esac
             return

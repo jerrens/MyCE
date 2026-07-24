@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.7.23
+__Version=26.7.24
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -40,14 +40,15 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    ${__ScriptName} [OPTIONS] [help | version | set | list [-l] [-a] [-d] [PATTERN] | KEY [args...]] [?]
+    ${__ScriptName} [OPTIONS] [help | version | set | list [-l] [-a] [-d] [-v] [PATTERN] | KEY [args...]] [?]
 
         <KEY> [...args]             The key of the command to run
 
-        list [-l] [-a] [-d] [PATTERN]  List the available command keys.
+        list [-l] [-a] [-d] [-v] [PATTERN]  List the available command keys.
                                     Include the '-l' arg to list one key per line.  Default is column view.
                                     Include the '-a' arg to include variables (uppercase)
                                     Include the '-d' arg to show descriptions for each command.
+                                    Include the '-v' arg to include alias values.
                                     Include a PATTERN to filter the results.
                                         Use grep pattern syntax (e.g., \`my list prod\`)
 
@@ -1769,7 +1770,20 @@ function list_keys() {
     local use_column=true
     local include_const=false
     local show_descriptions=false
+    local show_values=false
     local filter_pattern=""
+
+    # Normalize values/descriptions for list output to keep one command per line.
+    # Some aliases can contain embedded newlines (e.g. multiline/heredoc definitions).
+    normalize_list_meta() {
+        local text="$1"
+        text="${text//$'\r'/ }"
+        text="${text//$'\n'/ }"
+        text="${text//$'\t'/ }"
+        text="$(trim "$text")"
+        # shellcheck disable=SC2001
+        echo "$(echo "$text" | sed 's/[[:space:]]\+/ /g')"
+    }
 
     # Check for args
     while [[ $# -gt 0 ]]; do
@@ -1783,6 +1797,9 @@ function list_keys() {
             "-d")
                 show_descriptions=true;;
 
+            "-v")
+                show_values=true;;
+
             *)
                 filter_pattern="$1";;
         esac
@@ -1792,6 +1809,7 @@ function list_keys() {
 
     log 1 "Filter Pattern: $filter_pattern"
     log 1 "Show Descriptions: $show_descriptions"
+    log 1 "Show Values: $show_values"
 
     # Handle when column util is not installed
     if [[ $(type -t column) != "file" ]]; then
@@ -1823,20 +1841,55 @@ function list_keys() {
         if [[ -z "$words" ]]; then
             log 0 "No commands found matching the filter '${filter_pattern}'"
         else
-            # If showing descriptions, format the output with two columns
-            if [[ "$show_descriptions" == true ]]; then
+            # If showing descriptions and/or values, format as key + metadata columns
+            if [[ "$show_descriptions" == true || "$show_values" == true ]]; then
                 log 0 "The following commands are available:"
 
-                # Build array of key|description pairs for columnar output
-                declare -a desc_pairs=()
+                # Verbose value mode: print key/description on one line, then value
+                # on the next line using a consistent indented prefix.
+                if [[ "$show_values" == true ]]; then
+                    while IFS= read -r word; do
+                        local desc="${commandDescriptions["$word"]:-}"
+                        local value="${commands["$word"]:-}"
+                        desc="$(normalize_list_meta "$desc")"
+                        value="$(normalize_list_meta "$value")"
+
+                        if [[ "$show_descriptions" == true ]]; then
+                            if [[ -n "$desc" ]]; then
+                                printf "%s  %s\n" "$word" "$desc"
+                            else
+                                printf "%s\n" "$word"
+                            fi
+                        else
+                            printf "%s\n" "$word"
+                        fi
+
+                        printf "  -> %s\n" "$value"
+                    done <<< "$words"
+
+                    return 0
+                fi
+
+                # Build array of key|description|value rows for columnar output
+                declare -a output_rows=()
                 while IFS= read -r word; do
                     local desc="${commandDescriptions["$word"]:-}"
-                    desc_pairs+=("$word|$desc")
+                    local value="${commands["$word"]:-}"
+                    desc="$(normalize_list_meta "$desc")"
+                    value="$(normalize_list_meta "$value")"
+
+                    if [[ "$show_descriptions" == true && "$show_values" == true ]]; then
+                        output_rows+=("$word|$desc|$value")
+                    elif [[ "$show_descriptions" == true ]]; then
+                        output_rows+=("$word|$desc")
+                    else
+                        output_rows+=("$word|$value")
+                    fi
                 done <<< "$words"
 
                 # Try to use column utility if available and not in line view mode
                 if [[ "$use_column" == true ]] && [[ $(type -t column) == "file" ]]; then
-                    printf "%s\n" "${desc_pairs[@]}" | column -t -s "|"
+                    printf "%s\n" "${output_rows[@]}" | column -t -s "|"
                 else
                     # Fallback: use printf for manual formatting without column utility
                     # Find the longest key name for padding
@@ -1848,9 +1901,14 @@ function list_keys() {
                     done <<< "$words"
 
                     # Print with padding
-                    for pair in "${desc_pairs[@]}"; do
-                        IFS='|' read -r key desc <<< "$pair"
-                        printf "%-${max_key_len}s  %s\n" "$key" "$desc"
+                    for row in "${output_rows[@]}"; do
+                        if [[ "$show_descriptions" == true && "$show_values" == true ]]; then
+                            IFS='|' read -r key desc value <<< "$row"
+                            printf "%-${max_key_len}s  %s  %s\n" "$key" "$desc" "$value"
+                        else
+                            IFS='|' read -r key meta <<< "$row"
+                            printf "%-${max_key_len}s  %s\n" "$key" "$meta"
+                        fi
                     done
                 fi
             else

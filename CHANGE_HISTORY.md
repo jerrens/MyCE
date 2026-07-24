@@ -1,5 +1,15 @@
 # Change History
 
+## 26.7.24
+
+* Added `-v` support to `my list` to include command definition values in output
+* `my list -v` now supports and composes with existing list options:
+  * `-d` to include descriptions
+  * `-a` to include uppercase variables
+* Updated verbose list formatting for readability:
+  * key (and optional description) is printed on one line
+  * value is printed on the next line indented, with `->` prefix
+
 ## 26.7.23
 
 * **NEW FEATURE: Local File Overrides** - Added support for `.myCommands.<suffix>` files to allow user-specific command overrides without version control
