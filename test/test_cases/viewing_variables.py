@@ -19,6 +19,12 @@ test_cases = {
         "cmd": "list -l -a",
         "see": "section.SHOULD_BE_HIDDEN",
     },
+
+    "Should show all-cap root variables with -a -v values": {
+        "cmd": "list -a -v CONST",
+        "see": "CONST\\n  -> \\\"foo\\\"",
+        "description": "list -a -v should include uppercase variable values"
+    },
     
     # =========================================================================
     # REGRESSION TESTS: grep pattern fix for mixed-case commands

@@ -93,6 +93,27 @@ test_cases = {
         "see": "Echo all positional arguments",
         "description": "definition should show descriptions for commands using $@"
     },
+
+    # Test list -v shows key + value
+    "list -v tools.health": {
+        "pwd": "projectDescriptions",
+        "see": "tools\\.health\\s*\\n\\s*->\\s+curl -s -H \"Authorization: Bearer",
+        "description": "list -v should show value on the next line with -> prefix"
+    },
+
+    # Test list -d -v shows key + description + value
+    "list -d -v tools.health": {
+        "pwd": "projectDescriptions",
+        "see": "tools\\.health\\s+Check the health status of Tool A with authorization\\s*\\n\\s*->\\s+curl -s -H",
+        "description": "list -d -v should show key/description then -> value on next line"
+    },
+
+    # Test list -l -v works in line mode
+    "list -l -v tools.config": {
+        "pwd": "projectDescriptions",
+        "see": "tools\\.config\\s*\\n\\s*->\\s+curl -s https://api\\.example\\.com/config",
+        "description": "list -l -v should show -> value line in line-by-line mode"
+    },
 }
 
 
