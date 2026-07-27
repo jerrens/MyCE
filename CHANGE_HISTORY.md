@@ -2,9 +2,9 @@
 
 ## 26.7.23
 
-* **NEW FEATURE: .local File Overrides** - Added support for `.myCommands.local` files to allow user-specific command overrides without version control
-  * `.myCommands.local` and `.myCommand.local` files are processed immediately after their corresponding main files in each directory
-  * These local files are kept out of version control (add to `.gitignore`) for user-specific customizations
+* **NEW FEATURE: Local File Overrides** - Added support for `.myCommands.<suffix>` files to allow user-specific command overrides without version control
+  * `.myCommands.local`, `.myCommand.user`, etc. files are processed immediately after their corresponding main files in each directory
+  * These local files are kept out of version control (add `**/.myCommands.*` to `.gitignore`) for user-specific customizations
   * Full integration with `definition` command and `@` syntax - shows which file provides the active definition
   * Supports same syntax as main files: aliases, variables, sections, conditionals, and includes
 

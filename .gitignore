@@ -3,3 +3,4 @@ settings.json
 **/*.secret*
 **/.env
 **/*.bkp
+.myCommands.*

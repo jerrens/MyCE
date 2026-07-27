@@ -1408,18 +1408,21 @@ function load_my_custom_files() {
     # Find all files in the directory tree
     log 1 "Searching for ${MY_CUSTOM_FILE} files in the directory tree..."
     while [ "$dir" != "/" ]; do
-        # Add .local files BEFORE main files so in reverse iteration, main is processed first, then .local (giving .local priority)
-        log 2 "Checking for local override file: ${MY_CUSTOM_FILE}.local"
-        if [[ -f "$dir/${MY_CUSTOM_FILE}.local" ]]; then
-            log 3 "  Found local override file!"
-            file_paths+=("$dir/${MY_CUSTOM_FILE}.local")
-        fi
-        # Try without the trailing 's' for legacy local file
-        log 2 "Checking for legacy local override file: ${MY_CUSTOM_FILE%?}.local"
-        if [[ -f "$dir/${MY_CUSTOM_FILE%?}.local" ]]; then
-            log 3 "  Found legacy local override file!"
-            file_paths+=("$dir/${MY_CUSTOM_FILE%?}.local")
-        fi
+        # Add local files BEFORE main files so in reverse iteration, main is processed first, then local (giving .local priority)
+        log 2 "Checking for local override files: ${MY_CUSTOM_FILE}.local"
+        for f in "$dir/${MY_CUSTOM_FILE}".*; do
+            [[ -f "$f" ]] || continue
+            log 3 "  Found override file: $f"
+            file_paths+=("$f")
+        done
+
+        # Any suffix on the legacy (no trailing 's') filename
+        for f in "$dir/${MY_CUSTOM_FILE%?}".*; do
+            [[ -f "$f" ]] || continue
+            log 3 "  Found legacy override file: $f"
+            file_paths+=("$f")
+        done
+
         # Then add main file
         log 2 "Checking for file: ${MY_CUSTOM_FILE}"
         if [[ -f "$dir/${MY_CUSTOM_FILE}" ]]; then
@@ -1437,12 +1440,14 @@ function load_my_custom_files() {
 
     # Always process the home dir files
     # Support both the current and legacy file name for backwards compatibility
-    # Add .local override file BEFORE main home file
-    if [ -f "${HOME}/${MY_CUSTOM_FILE}.local" ]; then
-        file_paths+=("${HOME}/${MY_CUSTOM_FILE}.local")
-    elif [ -f "${HOME}/${MY_CUSTOM_FILE%?}.local" ]; then
-        file_paths+=("${HOME}/${MY_CUSTOM_FILE%?}.local")
-    fi
+    # Add local override file BEFORE main home file
+   for f in "${HOME}/${MY_CUSTOM_FILE}".*; do
+        [[ -f "$f" ]] && file_paths+=("$f")
+    done
+    for f in "${HOME}/${MY_CUSTOM_FILE%?}".*; do
+        [[ -f "$f" ]] && file_paths+=("$f")
+    done
+
     # Then add main home file
     if [ -f "${HOME}/${MY_CUSTOM_FILE}" ]; then
         file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
