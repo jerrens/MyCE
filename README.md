@@ -19,7 +19,7 @@
 
 My Command Engine or MyCE (as in "Mice") is a powerful, context-aware command-line tool, written intirely in bash, and designed to streamline project workflows by utilizing custom command definitions stored in `.myCommands` files within the directory tree.
 It searches for `.myCommands` files from the root down to the current directory, merging commands to create a localized and context-sensitive command set.
-The `~/.myCommands` file will always be processed first, even if not executed within your $HOME directory.
+The `$HOME/.myCommands` file will always be processed first, even if not executed within your $HOME directory.
 This tool is ideal for developers who frequently switch between projects or environments and need specific commands scoped to each context.
 
 ```ini
@@ -113,6 +113,14 @@ Constants are also included in the output of the `definition` location action.
 Other files may be included by using the `include <FILE>` syntax.
 The path may be absolute or relative and should follow the same INI-style syntax.
 If you want to include `.myCommands` in source control, it is recommended that you take advantage of this feature to store your credentials in a separate file.
+
+
+#### Local Variants
+
+By default, `.myCommands` files with a `.<suffix>` will automatically be parsed (ie. `.myCommands.local`, `.myCommands.user`, `.myCommands.private`, etc).
+These variants with a suffix are processed so that they will override or append any existing definitions in the `.myCommands` file.
+This is helpful if the `.myCommands` file is included in a repo, but you need to override the default repo value with a custom variant that applies for your repo, but that doesn't apply for others on the team.
+In is recommended you add the following line to your `.gitignore` repo file: `**/.myCommands.*`.
 
 #### Multi-line Commands
 

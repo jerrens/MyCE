@@ -1,0 +1,10 @@
+# .myCommands.local for projectLocalOverride - local overrides
+
+[alias]
+greeting=echo "Hello from local override"
+shared=echo "Shared from local override"
+
+[vars]
+version=v2.0-local
+ENV=development
+CUSTOM_VAR=local_value
