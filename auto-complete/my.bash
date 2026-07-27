@@ -48,7 +48,7 @@ _my_autocomplete() {
                 return 0;;
 
             list)
-                COMPREPLY=( $(compgen -W "-l -a -d" -- "${cur}") )
+                COMPREPLY=( $(compgen -W "-l -a -d -v" -- "${cur}") )
                 return 0;;
 
             #set)

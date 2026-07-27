@@ -554,14 +554,15 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    my [OPTIONS] [help | version | set | list [-l] [-a] [-d] [PATTERN] | KEY [args...]] [?]
+    my [OPTIONS] [help | version | set | list [-l] [-a] [-d] [-v] [PATTERN] | KEY [args...]] [?]
 
         <KEY> [...args]             The key of the command to run
 
-        list [-l] [-a] [-d] [PATTERN]    List the available command keys.
+        list [-l] [-a] [-d] [-v] [PATTERN]    List the available command keys.
                                     Include the '-l' arg to list one key per line.  Default is column view.
                                     Include the '-a' arg to include variables (uppercase)
                                     Include the '-d' arg to show descriptions.  Implies '-l'
+                                    Include the '-v' arg to include alias values.
                                     Include a PATTERN to filter the results.
                                         Use grep pattern syntax (e.g., \`my list prod\`)
 
@@ -617,7 +618,7 @@ Will be stored as:
 key=echo "Hello World"
 ```
 
-### `list [-l] [-a] [-d] [PATTERN]`
+### `list [-l] [-a] [-d] [-v] [PATTERN]`
 
 Can't remember what you used as the key?
 Just enter `my list` to view the available commands.
@@ -625,6 +626,7 @@ If you don't like columns, add the `-l` option at the end to show one command pe
 If you want to view all definitions (including variables), add the `-a` option.
 If you want to see descriptions for commands, add the `-d` option to show them alongside the keys.
 Note that `-d` automatically enables line-by-line view (implies `-l`).
+If you want to include alias values, add the `-v` option.
 
 ```shell
 >$ my list
@@ -644,6 +646,16 @@ The following commands are available:
 pod.con                   Execute an interactive bash shell in container
 pod.ls                    List all containers with details
 pod.log                   Show the container logs
+```
+
+To see alias values, add the `-v` option:
+
+```shell
+>$ my list -v pod
+The following commands are available:
+pod.con                   podman exec --interactive --tty ...
+pod.ls                    ${pod.CONTAINER_EXE} ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
+pod.log                   ${pod.CONTAINER_EXE} logs -f
 ```
 
 If you remember part of the command, add a grep pattern as an option filter the responses
@@ -963,7 +975,7 @@ You can combine pattern filtering with the formatting options:
 
 ```bash
 my list -l -d ^docker   # Line-by-line list with descriptions, filtered to commands starting with 'docker'
-my list -a prod         # Include variables, showing all commands/variables containing 'prod'
+my list -a -v prod      # Include variables and values for all keys matching 'prod'
 ```
 
 
