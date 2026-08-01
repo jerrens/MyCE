@@ -1,5 +1,12 @@
 # Change History
 
+## 26.7.31
+
+* **BugFix: Duplicate Definitions** - Reading `.myCommands` variant files (e.g. `.myCommands.va`) no longer produces duplicate entries in `definition` and `@` output
+* **BugFix: Command Substitution in Command Values** - Command values consisting of a command substitution with no path separator (e.g. `$(command -v echo)` or `` `command -v echo` ``) no longer fail with "Unknown key or command"
+  * `runCMD` pre-validation now skips any first word containing `$(` or a backtick, letting bash resolve the substitution at execution time
+  * Previously these values fell into the `type -t` validation branch, which failed on the literal unevaluated string and returned exit 127 before `eval` ran
+
 ## 26.7.24
 
 * Added `-v` support to `my list` to include command definition values in output

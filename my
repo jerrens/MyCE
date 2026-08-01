@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.7.24
+__Version=26.7.31
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -18,6 +18,14 @@ __origArgs=$* # Capture all of the original arguments
 # Detect the shell if possible
 if [[ $(type -t ps) == "file" ]]; then
     __Shell="$( (ps -p "$PPID" -o comm= || echo "$SHELL") | basename "$(cut -d' ' -f1)" 2>/dev/null )"
+fi
+# Fall back to /proc (available on Linux without ps, e.g. minimal containers)
+if [[ -z "$__Shell" ]] && [[ -r "/proc/$PPID/comm" ]]; then
+    __Shell="$(basename "$(cat "/proc/$PPID/comm")")"
+fi
+# If ps and /proc are unavailable, fall back to $SHELL env var
+if [[ -z "$__Shell" ]] && [[ -n "$SHELL" ]]; then
+    __Shell="$(basename "$SHELL")"
 fi
 __Shell="${__Shell:-false}"
 
@@ -810,23 +818,28 @@ function runCMD() {
         __cmd_word=$(__extract_first_word "$remainder")
     done
 
-    if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]]; then
+    # Skip pre-validation for words containing command substitutions — bash resolves them at execution time
+    if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]] && \
+       [[ "$__cmd_word" != *'$('* ]] && [[ "$__cmd_word" != *'`'* ]]; then
         # For paths (containing / or ~), check if file exists and is executable
         # For other commands, use 'type' to find them in PATH or as shell functions
         if [[ "$__cmd_word" == */* ]] || [[ "$__cmd_word" == ~* ]]; then
             # Expand tilde and check if file exists and is executable
             local __expanded_path="${__cmd_word/\~/$HOME}"
-            
-            # If the path contains unevaluated variables/substitutions, evaluate it safely
-            if [[ "$__expanded_path" == *\$* ]]; then
-                __expanded_path=$(eval echo "$__expanded_path" 2>/dev/null) || __expanded_path=""
-            fi
-            
-            # Only validate if we have a concrete path (no unevaluated variables)
-            if [[ -n "$__expanded_path" ]] && [[ ! "$__expanded_path" == *\$* ]]; then
-                if [[ ! -x "$__expanded_path" ]]; then
-                    log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
-                    return 127
+
+            # Skip pre-validation for paths containing command substitutions — bash resolves them at execution time
+            if [[ "$__expanded_path" != *'$('* ]] && [[ "$__expanded_path" != *'`'* ]]; then
+                # If the path contains unevaluated variables, evaluate it safely
+                if [[ "$__expanded_path" == *\$* ]]; then
+                    __expanded_path=$(eval echo "$__expanded_path" 2>/dev/null) || __expanded_path=""
+                fi
+
+                # Only validate if we have a concrete path (no unevaluated variables remain)
+                if [[ -n "$__expanded_path" ]] && [[ ! "$__expanded_path" == *\$* ]]; then
+                    if [[ ! -x "$__expanded_path" ]]; then
+                        log 0 "Unknown key or command. See \`'$__AppName' list\` for known keys"
+                        return 127
+                    fi
                 fi
             fi
         elif ! type -t "$__cmd_word" >/dev/null 2>&1; then
@@ -1456,20 +1469,17 @@ function load_my_custom_files() {
         file_paths+=("${HOME}/${MY_CUSTOM_FILE%?}")
     fi
 
-    # Remove consecutive duplicate entries (if executed in a subdirectory of ~)
-    # If this re-orders the list, then consider using https://stackoverflow.com/a/54797762/2136313 method
-    # Remove only consecutive duplicate entries (preserve order, allow non-consecutive duplicates)
+    # Remove duplicate entries, keeping first occurrence (order-preserving)
     unique_file_paths=()
-    prev=""
+    declare -A _seen_paths
     for fp in "${file_paths[@]}"; do
-        if [[ "$fp" != "$prev" ]]; then
+        if [[ -z "${_seen_paths[$fp]+x}" ]]; then
             unique_file_paths+=("$fp")
+            _seen_paths[$fp]=1
         fi
-        prev="$fp"
     done
     file_paths=("${unique_file_paths[@]}")
-    unset unique_file_paths
-    unset prev
+    unset unique_file_paths _seen_paths
 
     # Process the files in reverse order
     for (( idx=${#file_paths[@]}-1 ; idx>=0 ; idx-- )) ; do

@@ -252,6 +252,7 @@ def run_tests(test_dir):
                 text=True,
                 timeout=5,
                 shell=True,
+                executable=shutil.which("bash") or shutil.which("zsh"),
                 env=env_list,
                 cwd=test_cwd,  # Run in test_cwd
             )
