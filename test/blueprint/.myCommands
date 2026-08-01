@@ -192,7 +192,7 @@ nestedNamedCall=${alias.nestedNamedTarget named:Hello}
 [subshell]
 # Word extraction tests - regression tests for __extract_first_word() function
 # description: Command with command substitution path - alternative form $(command)
-backtickPath=$(echo /usr/bin)/echo
+backtickPath=`command -v echo`
 
 # description: Command with double-quoted argument containing spaces - quotes should not be treated as word boundary
 quotedArg=echo "This is a quoted string"
@@ -207,7 +207,7 @@ processSub=cat <(echo hello)
 complexExpansion=echo ${BIN_ROOT}/echo
 
 # description: Command using $(...) substitution in the path - should properly extract the word containing the substitution
-subshellPath=$(echo /usr/bin)/echo
+subshellPath=$(command -v echo)
 
 # Additional variations covering edge cases
 # description: Process substitution output form >(...)
