@@ -65,3 +65,4 @@ pass.through=echo "This command doesn't reference any named params"
 special.colon=echo "Got: $value"
 special.equals=echo "Got: $value"
 special.both=echo "Got: $value"
+nested.default.worktree=echo git worktree -b ${branch:-${1:-hotfix}} /repo.worktrees/${branch:-${1:-hotfix}}

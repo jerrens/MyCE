@@ -464,6 +464,71 @@ function __parse_nested_invocation_content() {
 declare -g __template_expanded_cmd=""
 declare -ga __template_remaining_positional=()
 declare -ga __template_unconsumed_named=()
+declare -g __template_named_default_result=""
+declare -g __template_named_default_replaced=0
+
+# Replaces ${name:-default} expressions for a specific named parameter while
+# correctly handling nested ${...} in the default portion.
+function __replace_named_default_expressions() {
+    local input="$1"
+    local param_name="$2"
+    local param_value="$3"
+
+    local output=""
+    local i=0
+    local len=${#input}
+    local replaced=0
+    local prefix="\${${param_name}:-"
+    local prefix_len=${#prefix}
+
+    while (( i < len )); do
+        local prev_char=""
+        if (( i > 0 )); then
+            prev_char="${input:i-1:1}"
+        fi
+
+        if [[ "${input:i:prefix_len}" == "$prefix" && "$prev_char" != '\\' ]]; then
+            local depth=1
+            local j=$((i + 2))
+
+            while (( j < len )); do
+                if [[ "${input:j:2}" == '${' ]]; then
+                    ((depth++))
+                    ((j+=2))
+                    continue
+                fi
+
+                local ch="${input:j:1}"
+                if [[ "$ch" == '\\' ]]; then
+                    ((j+=2))
+                    continue
+                fi
+
+                if [[ "$ch" == '}' ]]; then
+                    ((depth--))
+                    if (( depth == 0 )); then
+                        break
+                    fi
+                fi
+
+                ((j++))
+            done
+
+            if (( depth == 0 )); then
+                output+="$param_value"
+                ((replaced++))
+                i=$((j + 1))
+                continue
+            fi
+        fi
+
+        output+="${input:i:1}"
+        ((i++))
+    done
+
+    __template_named_default_result="$output"
+    __template_named_default_replaced=$replaced
+}
 
 # Applies positional and named arguments to a template.
 # Args:
@@ -575,8 +640,9 @@ function __apply_args_to_template() {
         local escaped_value
         escaped_value=$(printf '%s\n' "$param_value" | sed 's/[\/&]/\\&/g')
 
-        if [[ "$out" =~ \$\{$param_name:-[^}]*\} ]]; then
-            out=$(printf '%s\n' "$out" | sed "s/\\\${$param_name:-[^}]*}/$escaped_value/g")
+        __replace_named_default_expressions "$out" "$param_name" "$param_value"
+        if (( __template_named_default_replaced > 0 )); then
+            out="$__template_named_default_result"
             referenced_names["$param_name"]=1
         elif [[ "$out" =~ \$\{$param_name\} ]]; then
             out=$(printf '%s\n' "$out" | sed "s/\\\${$param_name}/$escaped_value/g")

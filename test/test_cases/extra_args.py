@@ -259,6 +259,27 @@ test_cases = {
         "description": "Test that both colon and equals can exist in parameter values",
     },
 
+    "Named params: nested default uses named value": {
+        "cmd": "named.nested.default.worktree branch=foo",
+        "see": "^git worktree -b foo /repo\.worktrees/foo$",
+        "pwd": "projectE",
+        "description": "Regression: nested ${branch:-${1:-hotfix}} should not leave trailing brace for branch=foo",
+    },
+
+    "Named params: nested default falls back to positional": {
+        "cmd": "named.nested.default.worktree foo",
+        "see": "^git worktree -b foo /repo\.worktrees/foo$",
+        "pwd": "projectE",
+        "description": "Nested default should use positional argument when named arg is missing",
+    },
+
+    "Named params: nested default falls back to literal default": {
+        "cmd": "named.nested.default.worktree",
+        "see": "^git worktree -b hotfix /repo\.worktrees/hotfix$",
+        "pwd": "projectE",
+        "description": "Nested default should use literal hotfix when named and positional are missing",
+    },
+
     # Test $@ with positional args (should include ALL args including referenced ones)
     "All args with positional: single positional and $@": {
         "cmd": "extra.all.with.pos John Doe",
