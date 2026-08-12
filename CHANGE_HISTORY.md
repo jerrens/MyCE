@@ -1,5 +1,10 @@
 # Change History
 
+## 26.8.12
+
+* **BugFix: `definition` / `@` Missing Output** - `get_key_definition` was bypassing the already-populated `commandLocations` map and re-parsing files with an incomplete parser; it now uses the pre-built maps populated by `load_my_custom_files` + `evaluate_conditionals`
+* **Enhancement: All Conditional Branches in `definition`** - Non-matching conditional branches are now also recorded in `commandAllLocations` so `my definition <key>` and the `@` suffix show every source location where a key is defined, not just the winning branch
+
 ## 26.7.31
 
 * **BugFix: Duplicate Definitions** - Reading `.myCommands` variant files (e.g. `.myCommands.va`) no longer produces duplicate entries in `definition` and `@` output
