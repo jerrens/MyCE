@@ -588,7 +588,7 @@ USAGE:
 
 
  By: Jerren Saunders
- Version: 26.2.25
+ Version: 26.9.1
 ```
 
 ### `version`
@@ -1072,28 +1072,56 @@ to load the specific file, or to load all files in the `/etc/bash_completion.d` 
 
 After adding one of those lines to `~/.bashrc`, save, then run `exec bash` and try again.
 
-### ZSH / Oh My ZSH
+### ZSH / Basic Zsh Setup
 
-To add auto completion support for MyCE in ZSH, if you already have the folder `/usr/local/share/zsh/site-functions` you can run `my update` to download the latest release and install the auto-completion script.
-You will need to run `exec zsh` after the update has completed for your shell to load the new completion script.
-To manually install the completion script, do the following:
+If zsh is installed but not your default shell, open a zsh session first with `zsh`, then enable completion in that shell.
+The essential requirements for a standard zsh installation are:
 
-1. Copy the `auto-complete/_my.zsh` file from this repo to `/usr/local/share/zsh/site-functions/_my`
-2. Enable the execute flaf (`chmod a+rx`)
+1. `compinit` is loaded (`autoload -Uz compinit && compinit`)
+2. The completion file is named `_my` and is stored in a directory listed in `$fpath`
+3. The completion file is not kept as `_my.zsh` in a random folder
 
-This can be done with the following commands (these will likely need to be run as `sudo`)
+To install MyCE for zsh manually, run the following in a zsh shell:
 
-```shell
-curl -o /usr/local/share/zsh/site-functions/_my https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/auto-complete/_my.zsh
-chmod a+rx /usr/local/share/zsh/site-functions/_my
+```zsh
+mkdir -p /usr/local/share/zsh/site-functions
+sudo install -m 644 auto-complete/_my.zsh /usr/local/share/zsh/site-functions/_my
+
+# Ensure zsh loads completions on startup
+if ! grep -q 'autoload -Uz compinit' ~/.zshrc 2>/dev/null; then
+  echo 'autoload -Uz compinit && compinit' >> ~/.zshrc
+fi
+if ! grep -q '/usr/local/share/zsh/site-functions' ~/.zshrc 2>/dev/null; then
+  echo 'fpath=(/usr/local/share/zsh/site-functions $fpath)' >> ~/.zshrc
+fi
+
+exec zsh
+```
+
+If you prefer a custom directory instead of `/usr/local/share/zsh/site-functions`, use this pattern instead:
+
+```zsh
+mkdir -p ~/.zsh-completions
+cp auto-complete/_my.zsh ~/.zsh-completions/_my
+fpath=(~/.zsh-completions $fpath)
+autoload -Uz compinit && compinit
 ```
 
 > [!NOTE]
-> The `_my` script needs to be stored in a folder that is listed in `$fpath` or you need to add your custom folder to that variable.
+> The file name must be `_my` (without the `.zsh` suffix) when it is installed in `$fpath`.
+> If zsh still does not complete, check `echo $fpath` and confirm the directory containing `_my` is present.
 
-Once the completion file is in place, run `exec zsh` to reload your environment.
-You can check to see if the command completion is working by entering `my hel<TAB>`.
-If working, it should auto complete to `my help`.
+You can also install the completion with the built-in updater when you are already inside zsh:
+
+```zsh
+my update
+exec zsh
+```
+
+If your default shell is bash and you are not using zsh as the login shell, do not run `my update` from bash unless you specifically want bash completion; run it from a zsh session instead.
+
+Once the completion file is in place, test it by entering `my hel<TAB>` inside zsh.
+If it works, it should auto-complete to `my help`.
 
 ## Guide
 

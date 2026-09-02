@@ -1,5 +1,11 @@
 # Change History
 
+## 26.9.1
+
+* **Shell-Aware Update Completion Setup** - `my update` now detects the active shell more reliably and installs the correct auto-completion for zsh or bash, even when launched through `sudo` or from a non-default shell session
+* **Documentation: ZSH Completion Setup for Default Installations** - Clarified the setup steps for users whose system shell is bash but who run zsh interactively; completion now explicitly requires `autoload -Uz compinit && compinit` and a file named `_my` in a directory on `$fpath`
+* **Docs: Non-Default Shell Guidance** - Added explicit notes that zsh completion must be enabled from a zsh session, and that `my update` should be run from zsh when the user wants zsh completion rather than bash completion
+
 ## 26.8.12
 
 * **BugFix: `definition` / `@` Missing Output** - `get_key_definition` was bypassing the already-populated `commandLocations` map and re-parsing files with an incomplete parser; it now uses the pre-built maps populated by `load_my_custom_files` + `evaluate_conditionals`

@@ -8,15 +8,22 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.8.12
+__Version=26.9.1
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
 __origArgs=$* # Capture all of the original arguments
 
-# Detect the shell if possible
-if [[ $(type -t ps) == "file" ]]; then
+# Detect the shell if possible. Prefer shell environment markers over the parent process,
+# because `sudo`/root re-executes the script in a different process tree.
+if [[ -n "${ZSH_VERSION:-}" ]]; then
+    __Shell="zsh"
+elif [[ -n "${BASH_VERSION:-}" ]]; then
+    __Shell="bash"
+fi
+
+if [[ -z "$__Shell" ]] && [[ $(type -t ps) == "file" ]]; then
     __Shell="$( (ps -p "$PPID" -o comm= || echo "$SHELL") | basename "$(cut -d' ' -f1)" 2>/dev/null )"
 fi
 # Fall back to /proc (available on Linux without ps, e.g. minimal containers)
@@ -2256,11 +2263,62 @@ function download_latest_release() {
         exit 1
     fi
 
-    # Extract the downloaded archive
-    # archive_root="MyCE-${tag#v}"
-    tar -xzf "${temp_file}" --directory /tmp --wildcards "${archive_root}/my" --wildcards "${archive_root}/auto-complete/*"
+    # Extract the downloaded archive.
+    # Older releases used bash-completion/, newer ones use auto-complete/.
+    tar -xzf "${temp_file}" --directory /tmp \
+        --wildcards "${archive_root}/my" \
+        --wildcards "${archive_root}/auto-complete/*" \
+        --wildcards "${archive_root}/bash-completion/*" 2>/dev/null || true
 }
 
+
+function configure_completion_for_shell() {
+    local shell_name="${1:-${__Shell:-}}"
+    local source_file="${2:-}"
+
+    case "${shell_name}" in
+        zsh)
+            local zsh_site_dir="/usr/local/share/zsh/site-functions"
+            local zsh_rc="${HOME}/.zshrc"
+
+            runCMD mkdir -p "${zsh_site_dir}"
+            runCMD install -m 644 "${source_file}" "${zsh_site_dir}/_my"
+
+            if [[ -f "${zsh_rc}" ]]; then
+                if ! grep -q 'autoload -Uz compinit' "${zsh_rc}" 2>/dev/null; then
+                    runCMD sh -c "printf '\nautoload -Uz compinit\ncompinit\n' >> \"${zsh_rc}\""
+                fi
+                if ! grep -q "${zsh_site_dir}" "${zsh_rc}" 2>/dev/null; then
+                    runCMD sh -c "printf '\nfpath=(%s \\$fpath)\n' \"${zsh_site_dir}\" >> \"${zsh_rc}\""
+                fi
+            else
+                runCMD sh -c "printf 'autoload -Uz compinit\\ncompinit\\nfpath=(%s \\$fpath)\\n' \"${zsh_site_dir}\" > \"${zsh_rc}\""
+            fi
+
+            log 0 "ZSH completion enabled. Start a new zsh session or run 'exec zsh'."
+            ;;
+        bash)
+            local bash_completion_dir="/etc/bash_completion.d"
+            local bash_rc="${HOME}/.bashrc"
+
+            runCMD mkdir -p "${bash_completion_dir}"
+            runCMD install -m 644 "${source_file}" "${bash_completion_dir}/my.bash_completion"
+
+            if [[ -f "${bash_rc}" ]]; then
+                if ! grep -q '/etc/bash_completion' "${bash_rc}" 2>/dev/null; then
+                    runCMD sh -c "printf '\nif [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\n' >> \"${bash_rc}\""
+                fi
+            else
+                runCMD sh -c "printf 'if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\\n' > \"${bash_rc}\""
+            fi
+
+            log 0 "Bash completion enabled. Start a new bash session or run 'exec bash'."
+            ;;
+        *)
+            log 0 "No auto-completion setup performed for shell '${shell_name}'."
+            ;;
+    esac
+}
 
 # Update the script with the latest version
 function update_script() {
@@ -2332,13 +2390,13 @@ function update_script() {
         log 0 "This should be run as root.  Attempting to elevate permissions..."
         log 1 "runCMD XXdo $0 $__origArgs"
 
-        # Re-run this command as sudo
+        # Re-run this command as sudo while preserving the active shell environment.
         if [[ $(type -t dzdo) == "file" ]]; then
             log 2 "Using dzdo for privilege escalation"
-            runCMD dzdo "$0" "$__origArgs"
+            runCMD env SHELL="${SHELL:-}" ZSH_VERSION="${ZSH_VERSION:-}" BASH_VERSION="${BASH_VERSION:-}" dzdo "$0" "$__origArgs"
         else
             log 2 "Using sudo for privilege escalation"
-            runCMD sudo "$0" "$__origArgs"
+            runCMD env SHELL="${SHELL:-}" ZSH_VERSION="${ZSH_VERSION:-}" BASH_VERSION="${BASH_VERSION:-}" sudo -E "$0" "$__origArgs"
         fi
         exit
     fi
@@ -2370,11 +2428,16 @@ function update_script() {
         completion_dir="/etc/bash_completion.d"
     fi
 
-    # Now that we know the shell type, move the appropriate completion file and set permissions
+    # Install the completion file and wire it into the active shell configuration.
     if [[ -n "$src_file" && -n "$dest_file" && -d "${completion_dir}" ]]; then
-        log 1 "Updating ${__Shell} completion file at ${completion_dir}..."
-        runCMD mv --force "$src_file" "$dest_file"
-        runCMD chmod 644 "$dest_file"
+        if [[ -f "$src_file" ]]; then
+            log 1 "Updating ${__Shell} completion file at ${completion_dir}..."
+            runCMD mkdir -p "${completion_dir}"
+            runCMD install -m 644 "$src_file" "$dest_file"
+            configure_completion_for_shell "${__Shell}" "$src_file"
+        else
+            log 1 "No ${__Shell} completion file found in archive; skipping completion install."
+        fi
     fi
 
     log 0 "Update finished!"
