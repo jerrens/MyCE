@@ -38,5 +38,17 @@ tool=echo "Container tool is: ${CONTAINER_TOOL}"
 debug=echo "Debug level is: ${DEBUG_LEVEL}"
 optional=echo "Optional var is: ${OPTIONAL_VAR}"
 
+[IF $CONTAINER_ENGINE == "podman"]
+    [pod]
+    up=echo "Podman pod up"
+    down=echo "Podman pod down"
+    replace=echo "Podman pod replace"
+[ELSE IF $CONTAINER_ENGINE == "docker"]
+    [pod]
+    up=echo "Docker pod up"
+    down=echo "Docker pod down"
+    replace=echo "Docker pod replace"
+[FI]
+
 [section]
 test.key=echo "basic_value"

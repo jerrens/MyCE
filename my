@@ -1396,10 +1396,10 @@ function process_ini_file() {
             continue
         fi
 
-        # Check for section headers
-        if [[ "$line" =~ ^\[.*\]$ ]]; then
-            log 2 "Section Header detected: ${line:1:-1}"
-            section=${line:1:-1}
+        # Check for section headers (allow leading indentation, common in conditional blocks)
+        if [[ "$line" =~ ^[[:space:]]*\[([^][]+)\][[:space:]]*$ ]]; then
+            section="${BASH_REMATCH[1]}"
+            log 2 "Section Header detected: $section"
             continue
         fi
 

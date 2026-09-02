@@ -232,7 +232,7 @@ def run_tests(test_dir):
                 print(f"\n{expected_output}\n" + "-" * 30)
                 continue
 
-            test_cwd = os.path.join(orig_cwd, pwd) if not os.path.isabs(pwd) else pwd
+            test_cwd = os.path.join(test_dir, pwd) if not os.path.isabs(pwd) else pwd
             # Don't change directory, use cwd in subprocess.run
 
             if raw_cmd is not None:
