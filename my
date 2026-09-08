@@ -2052,11 +2052,11 @@ function list_keys() {
                             value="$(normalize_list_meta "$value")"
                         fi
 
-                        value="$(colorize_nested_references "$value")"
+                        value="$(colorize_nested_references "$value" "$ANSI_RESET")"
 
                         if [[ "$show_descriptions" == true ]]; then
                             if [[ -n "$desc" ]]; then
-                                printf "%s  %s\n" "$word" "$desc"
+                                printf "%s  %s%s%s\n" "$word" "$ANSI_YELLOW" "$desc" "$ANSI_RESET"
                             else
                                 printf "%s\n" "$word"
                             fi
@@ -2064,7 +2064,7 @@ function list_keys() {
                             printf "%s\n" "$word"
                         fi
 
-                        printf "  %s->%s %s%s%s\n" "$ANSI_YELLOW" "$ANSI_RESET" "$ANSI_GREEN" "$value" "$ANSI_RESET"
+                        printf "  %s->%s %s\n" "$ANSI_YELLOW" "$ANSI_RESET" "$value"
                     done <<< "$words"
 
                     return 0
@@ -2077,6 +2077,10 @@ function list_keys() {
                     local value="${commands["$word"]:-}"
                     desc="$(normalize_list_meta "$desc")"
                     value="$(normalize_list_meta "$value")"
+
+                    if [[ -n "$desc" ]]; then
+                        desc="${ANSI_YELLOW}${desc}${ANSI_RESET}"
+                    fi
 
                     if [[ "$show_descriptions" == true && "$show_values" == true ]]; then
                         output_rows+=("$word|$desc|$value")
@@ -2183,11 +2187,15 @@ function get_key_definition() {
         if [[ "$NO_ANSI" == true ]]; then
             log 0 "${location}|${display_key}|${desc}|${value}" | eval "${columnCMD}"
         else
-            printf "%s%s%s\t%s%s%s\t%s%s%s\t%s%s%s\n" \
-                "$ANSI_CYAN" "$location" "$ANSI_RESET" \
-                "$ANSI_BOLD" "$display_key" "$ANSI_RESET" \
+            local location_file="${location%:*}"
+            local location_line="${location##*:}"
+            value="$(colorize_nested_references "$value" "$ANSI_RESET")"
+            printf "%s%s%s:%s%s%s\t%s%s%s\t%s%s%s\t%s%s%s\n" \
+                "$ANSI_BLUE" "$location_file" "$ANSI_RESET" \
+                "$ANSI_CYAN" "$location_line" "$ANSI_RESET" \
+                "$ANSI_BOLD$ANSI_GREEN" "$display_key" "$ANSI_RESET" \
                 "$ANSI_YELLOW" "$desc" "$ANSI_RESET" \
-                "$ANSI_GREEN" "$value" "$ANSI_RESET"
+                "" "$value" ""
         fi
     done <<< "$all_entries"
 
