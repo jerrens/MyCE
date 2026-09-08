@@ -90,6 +90,8 @@ USAGE:
         -c      Run the command without sourcing the default shell rc file
         -v      Verbose Level (Multiple may be given to increase the verbosity)
         -d      Dry Run.  A trailing '?' may also be used as a special syntax to enable dry-run mode.
+        --no-color
+            Disable ANSI color output for this invocation
 
 
 EOT
@@ -117,8 +119,35 @@ EOT
 VERBOSE=0
 DRYRUN=false
 DEFINITION_PREVIEW=false
+NO_ANSI=${MYCE_NO_ANSI:+true}
+NO_ANSI=${NO_ANSI:-false}
 MY_CUSTOM_FILE=${MYCE_FILE_NAME:-.myCommands}
 COLUMN_WIDTH=${MYCE_COLUMN_WIDTH:-120} # If set to 'FULL', then the full terminal width will be used
+
+# Centralized ANSI styles. Set NO_ANSI=true to disable all styles for this invocation.
+ANSI_RESET=$'\033[0m'
+ANSI_BOLD=$'\033[1m'
+ANSI_DIM=$'\033[2m'
+ANSI_ITALIC=$'\033[3m'
+ANSI_CYAN=$'\033[36m'
+ANSI_BLUE=$'\033[34m'
+ANSI_YELLOW=$'\033[33m'
+ANSI_GREEN=$'\033[32m'
+ANSI_MAGENTA=$'\033[35m'
+ANSI_RED=$'\033[31m'
+
+if [[ "$NO_ANSI" == true ]]; then
+    ANSI_RESET=""
+    ANSI_BOLD=""
+    ANSI_DIM=""
+    ANSI_ITALIC=""
+    ANSI_CYAN=""
+    ANSI_BLUE=""
+    ANSI_YELLOW=""
+    ANSI_GREEN=""
+    ANSI_MAGENTA=""
+    ANSI_RED=""
+fi
 
 if [[ -n "${__Shell}" ]] && [ "${__Shell}" != "false" ]; then
     SHELL_RC="$HOME/.${__Shell}rc"
@@ -137,6 +166,33 @@ if [[ "${COLUMN_WIDTH}" == "FULL" ]]; then
     unset COLUMN_WIDTH
 fi
 
+# Long options are handled before getopts so they can appear before the command.
+__my_filtered_args=()
+for __my_arg in "$@"; do
+    if [[ "$__my_arg" == "--no-color" ]]; then
+        NO_ANSI=true
+    else
+        __my_filtered_args+=("$__my_arg")
+    fi
+done
+set -- "${__my_filtered_args[@]}"
+
+# Avoid emitting escape sequences into redirected or piped output.
+if [[ ! -t 1 && ! -t 2 ]]; then
+    NO_ANSI=true
+fi
+if [[ "$NO_ANSI" == true ]]; then
+    ANSI_RESET=""
+    ANSI_BOLD=""
+    ANSI_DIM=""
+    ANSI_ITALIC=""
+    ANSI_CYAN=""
+    ANSI_BLUE=""
+    ANSI_YELLOW=""
+    ANSI_GREEN=""
+    ANSI_MAGENTA=""
+    ANSI_RED=""
+fi
 
 # Prints log message to the terminal
 # Level 0 are considered "important" messages and will be printed to stdout, while levels 1 and above are considered "debug" messages and will be printed to stderr
@@ -145,12 +201,19 @@ fi
 function log() {
     local lvl=$1
     local msg=$2
+    local log_style=""
+
+    case "$lvl" in
+        1) log_style="$ANSI_CYAN" ;;
+        2) log_style="$ANSI_BLUE" ;;
+        3) log_style="$ANSI_DIM" ;;
+    esac
 
     if (( lvl <= VERBOSE )); then
         if (( lvl == 0 )); then
             echo -e "$msg"
         else
-            echo -e "$msg" >&2
+            echo -e "${log_style}${msg}${ANSI_RESET}" >&2
         fi
     fi
 }
@@ -784,6 +847,18 @@ function __expand_nested_invocations() {
     return 0
 }
 
+# Apply the configured style to nested MyCE references without changing their text.
+function colorize_nested_references() {
+    local value="$1"
+
+    if [[ "$NO_ANSI" == true ]]; then
+        printf '%s' "$value"
+        return
+    fi
+
+    printf '%s' "$value" | sed "s/\\\${[^}]*}/${ANSI_MAGENTA}&${ANSI_GREEN}/g"
+}
+
 while getopts 'dvc' option; do
     # echo "Option: ${option}"
     case ${option} in
@@ -835,17 +910,17 @@ function runCMD() {
 
             # Output SRC line if available
             if [[ -n "$source_location" ]]; then
-                log 0 "SRC: ${source_location}"
+                log 0 "${ANSI_CYAN}SRC:${ANSI_RESET} ${source_location}"
             fi
 
             # Output DESC line if available
             if [[ -n "$desc" ]]; then
-                log 0 "DESC: ${desc}"
+                log 0 "${ANSI_YELLOW}DESC:${ANSI_RESET} ${desc}"
             fi
         fi
 
         # Build the dry-run command string and escape special control characters
-        dryCMD="CMD: $cmd_string"
+        dryCMD="${ANSI_GREEN}CMD:${ANSI_RESET} $cmd_string"
         # Append remaining arguments if any
         if [[ $# -gt 0 ]]; then
             dryCMD="$dryCMD $*"
@@ -1974,6 +2049,8 @@ function list_keys() {
                             value="$(normalize_list_meta "$value")"
                         fi
 
+                        value="$(colorize_nested_references "$value")"
+
                         if [[ "$show_descriptions" == true ]]; then
                             if [[ -n "$desc" ]]; then
                                 printf "%s  %s\n" "$word" "$desc"
@@ -1984,7 +2061,7 @@ function list_keys() {
                             printf "%s\n" "$word"
                         fi
 
-                        printf "  -> %s\n" "$value"
+                        printf "  %s->%s %s%s%s\n" "$ANSI_YELLOW" "$ANSI_RESET" "$ANSI_GREEN" "$value" "$ANSI_RESET"
                     done <<< "$words"
 
                     return 0
@@ -2099,7 +2176,16 @@ function get_key_definition() {
     while IFS= read -r entry; do
         [[ -z "$entry" ]] && continue
         IFS='|' read -r location desc value <<< "$entry"
-        log 0 "${location}|${display_key}|${desc}|${value//\\n/\\\\n}" | eval "${columnCMD}"
+        value="${value//\\n/\\\\n}"
+        if [[ "$NO_ANSI" == true ]]; then
+            log 0 "${location}|${display_key}|${desc}|${value}" | eval "${columnCMD}"
+        else
+            printf "%s%s%s\t%s%s%s\t%s%s%s\t%s%s%s\n" \
+                "$ANSI_CYAN" "$location" "$ANSI_RESET" \
+                "$ANSI_BOLD" "$display_key" "$ANSI_RESET" \
+                "$ANSI_YELLOW" "$desc" "$ANSI_RESET" \
+                "$ANSI_GREEN" "$value" "$ANSI_RESET"
+        fi
     done <<< "$all_entries"
 
     log 2 "" # Add spacing in verbose mode

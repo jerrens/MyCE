@@ -9,6 +9,19 @@ test_cases = {
         "see": ".*",  # Should produce output with verbosity
         "description": "Test single -v verbosity flag"
     },
+
+    # ANSI color controls
+    "--no-color list": {
+        "cmd": "--no-color list -v alias.nestedChainA",
+        "see": "(?!.*\\x1b).*alias\\.nestedChainA.*->",
+        "description": "Test --no-color disables ANSI output while preserving list output"
+    },
+    "MYCE_NO_ANSI list": {
+        "pre": "MYCE_NO_ANSI=1",
+        "cmd": "list -v alias.nestedChainA",
+        "see": "(?!.*\\x1b).*alias\\.nestedChainA.*->",
+        "description": "Test MYCE_NO_ANSI disables ANSI output while preserving list output"
+    },
     "-vv list": {
         "cmd": "-vv list",
         "see": ".*",  # Should produce output with increased verbosity
