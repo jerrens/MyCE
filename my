@@ -113,6 +113,13 @@ EOT
     log 2 "  ShellRC: ${MYCE_RUNCOM}"
     log 2 ""
 
+    # Surface the effective runtime values in normal help output for troubleshooting.
+    log 0 "Runtime Configuration:"
+    log 0 "  NO_ANSI=${NO_ANSI}"
+    log 0 "  MY_CUSTOM_FILE=${MY_CUSTOM_FILE}"
+    log 0 "  COLUMN_WIDTH=${COLUMN_WIDTH:-FULL}"
+    log 0 "  MYCE_RUNCOM=${MYCE_RUNCOM}"
+
 }
 
 # Default Settings
@@ -136,17 +143,34 @@ ANSI_GREEN=$'\033[32m'
 ANSI_MAGENTA=$'\033[35m'
 ANSI_RED=$'\033[31m'
 
+function __apply_ansi_state() {
+    if [[ "$NO_ANSI" == true ]]; then
+        ANSI_RESET=""
+        ANSI_BOLD=""
+        ANSI_DIM=""
+        ANSI_ITALIC=""
+        ANSI_CYAN=""
+        ANSI_BLUE=""
+        ANSI_YELLOW=""
+        ANSI_GREEN=""
+        ANSI_MAGENTA=""
+        ANSI_RED=""
+    else
+        ANSI_RESET=$'\033[0m'
+        ANSI_BOLD=$'\033[1m'
+        ANSI_DIM=$'\033[2m'
+        ANSI_ITALIC=$'\033[3m'
+        ANSI_CYAN=$'\033[36m'
+        ANSI_BLUE=$'\033[34m'
+        ANSI_YELLOW=$'\033[33m'
+        ANSI_GREEN=$'\033[32m'
+        ANSI_MAGENTA=$'\033[35m'
+        ANSI_RED=$'\033[31m'
+    fi
+}
+
 if [[ "$NO_ANSI" == true ]]; then
-    ANSI_RESET=""
-    ANSI_BOLD=""
-    ANSI_DIM=""
-    ANSI_ITALIC=""
-    ANSI_CYAN=""
-    ANSI_BLUE=""
-    ANSI_YELLOW=""
-    ANSI_GREEN=""
-    ANSI_MAGENTA=""
-    ANSI_RED=""
+    __apply_ansi_state
 fi
 
 if [[ -n "${__Shell}" ]] && [ "${__Shell}" != "false" ]; then
@@ -1228,6 +1252,7 @@ function trim() {
 function process_ini_file() {
     log 1 "Loading file: $1"
     local filepath="$1"
+    local in_myce_section=false
 
     # Detect the line break character for this file (LF vs CRLF) and warn the user if it is not LF
     if grep --quiet $'\r' --max-count 1 "$1"; then
@@ -1478,7 +1503,56 @@ function process_ini_file() {
         # Check for section headers (allow leading indentation, common in conditional blocks)
         if [[ "$line" =~ ^[[:space:]]*\[([^][]+)\][[:space:]]*$ ]]; then
             section="${BASH_REMATCH[1]}"
-            log 2 "Section Header detected: $section"
+            in_myce_section=false
+            if [[ "$section" == "MYCE" ]]; then
+                in_myce_section=true
+                log 2 "Reserved [MYCE] metadata section detected"
+            else
+                log 2 "Section Header detected: $section"
+            fi
+            continue
+        fi
+
+        # Reserved metadata section: consume only a tiny allowlist and never store
+        # keys as ordinary command definitions. This allows project-local or user-level
+        # config without polluting the command namespace.
+        if [[ "$in_myce_section" == true ]]; then
+            IFS='=' read -r key value <<< "$line"
+            key="${key#"${key%%[![:space:]]*}"}"
+            key="${key%"${key##*[![:space:]]}"}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+
+            case "$key" in
+                NO_ANSI)
+                    if [[ -z "${MYCE_NO_ANSI:-}" && "${NO_ANSI}" != true ]]; then
+                        case "${value,,}" in
+                            true|yes|1|on) NO_ANSI=true ;;
+                            false|no|0|off|empty) NO_ANSI=false ;;
+                            *) NO_ANSI=false ;;
+                        esac
+                        __apply_ansi_state
+                    fi
+                    ;;
+                FILE_NAME)
+                    if [[ -z "${MYCE_FILE_NAME:-}" ]]; then
+                        MY_CUSTOM_FILE="$value"
+                    fi
+                    ;;
+                COLUMN_WIDTH)
+                    if [[ -z "${MYCE_COLUMN_WIDTH:-}" ]]; then
+                        COLUMN_WIDTH="$value"
+                        if [[ "${COLUMN_WIDTH}" == "FULL" ]]; then
+                            unset COLUMN_WIDTH
+                        fi
+                    fi
+                    ;;
+                RUNCOM)
+                    if [[ -z "${MYCE_RUNCOM:-}" ]]; then
+                        MYCE_RUNCOM="$value"
+                    fi
+                    ;;
+            esac
             continue
         fi
 

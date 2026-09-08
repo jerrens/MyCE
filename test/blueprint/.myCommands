@@ -24,6 +24,11 @@ number=echo "One"
 confirm=read -rp "Are you sure? [Y/n] " -n 1 && echo && [[ $REPLY =~ ^[Yy]$ ]];
 testConfirm={ $confirm } && echo "Confirmed" || echo "Rejected"
 
+[MYCE]
+NO_ANSI=true
+FILE_NAME=.myCommands
+COLUMN_WIDTH=120
+
 [multi]
 cmd1=echo "First command"
 cmd2=echo "Second \

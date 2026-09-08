@@ -22,6 +22,16 @@ test_cases = {
         "see": "(?!.*\\x1b).*alias\\.nestedChainA.*->",
         "description": "Test MYCE_NO_ANSI disables ANSI output while preserving list output"
     },
+    "MYCE section metadata is ignored in command lists": {
+        "cmd": "list -a -l",
+        "see": "(?s)(?!.*MYCE\\.NO_ANSI)(?!.*MYCE\\.FILE_NAME)(?!.*MYCE\\.COLUMN_WIDTH).*",
+        "description": "Test [MYCE] keys remain metadata-only and never appear as command keys"
+    },
+    "help shows effective runtime values": {
+        "cmd": "help",
+        "see": "Runtime Configuration:.*NO_ANSI=.*MY_CUSTOM_FILE=.*COLUMN_WIDTH=.*MYCE_RUNCOM=.*",
+        "description": "Test help output now displays the effective configuration values for troubleshooting"
+    },
     "-vv list": {
         "cmd": "-vv list",
         "see": ".*",  # Should produce output with increased verbosity
