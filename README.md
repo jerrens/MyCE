@@ -1009,6 +1009,18 @@ Optional environment variables may be defined to override default values for MyC
 These variables should be set for the current session by using `export <VARIABLE>=<VALUE>`
 or permanently by defining in `.bashrc` or `.zshrc`.
 
+MyCE also recognizes a reserved metadata section named `[MYCE]` in any discovered `.myCommands` file. That section is parsed as configuration metadata only and is not registered as a command namespace. The supported keys mirror the existing environment-variable knobs:
+
+```ini
+[MYCE]
+NO_ANSI=true
+FILE_NAME=.myCommands
+COLUMN_WIDTH=120
+RUNCOM=~/.bashrc
+```
+
+These values are applied as file-sourced defaults. If the equivalent `MYCE_*` environment variable is already present in the process environment, that environment value remains authoritative and overrides the `[MYCE]` file value for the current invocation.
+
 ### `MYCE_FILE_NAME`
 
 By default, MyCE will load command definitions from `.myCommands` files in the current directory tree.
