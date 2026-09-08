@@ -17,6 +17,12 @@ test_cases = {
         "description": "NESTED: chained nested references resolve recursively"
     },
 
+    "list -vv alias.nestedChainA": {
+        "cmd": "list -vv alias.nestedChainA",
+        "see": "alias\.nestedChainA\\s*\\n\\s*->\\s+echo Nested chain works",
+        "description": "LIST: double verbose value mode expands chained aliases"
+    },
+
     "alias.nestedMissing": {
         "cmd": "alias.nestedMissing",
         "see": "bad substitution",

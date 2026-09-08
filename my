@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.9.1
+__Version=26.9.8
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -64,6 +64,7 @@ USAGE:
                                     Include the '-a' arg to include variables (uppercase)
                                     Include the '-d' arg to show descriptions for each command.
                                     Include the '-v' arg to include alias values.
+                                      Use '-vv' to expand referenced aliases in values.
                                     Include a PATTERN to filter the results.
                                         Use grep pattern syntax (e.g., \`my list prod\`)
 
@@ -1879,6 +1880,7 @@ function list_keys() {
     local include_const=false
     local show_descriptions=false
     local show_values=false
+    local expand_values=false
     local filter_pattern=""
 
     # Normalize values/descriptions for list output to keep one command per line.
@@ -1907,6 +1909,10 @@ function list_keys() {
 
             "-v")
                 show_values=true;;
+
+            "-vv")
+                show_values=true
+                expand_values=true;;
 
             *)
                 filter_pattern="$1";;
@@ -1961,6 +1967,12 @@ function list_keys() {
                         local value="${commands["$word"]:-}"
                         desc="$(normalize_list_meta "$desc")"
                         value="$(normalize_list_meta "$value")"
+
+                        if [[ "$expand_values" == true ]]; then
+                            __expand_nested_invocations "$value"
+                            value="$__nested_expanded_cmd"
+                            value="$(normalize_list_meta "$value")"
+                        fi
 
                         if [[ "$show_descriptions" == true ]]; then
                             if [[ -n "$desc" ]]; then

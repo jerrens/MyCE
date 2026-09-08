@@ -1,5 +1,10 @@
 # Change History
 
+## 26.9.8
+
+* **Enhancement: Expanded Alias Definitions in `list`** - Added `my list -vv` to recursively expand referenced aliases in displayed command values
+* Kept `my list -v` output unchanged so alias references remain visible when inspecting the original definition
+
 ## 26.9.1
 
 * **Shell-Aware Update Completion Setup** - `my update` now detects the active shell more reliably and installs the correct auto-completion for zsh or bash, even when launched through `sudo` or from a non-default shell session
