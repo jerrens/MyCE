@@ -850,13 +850,14 @@ function __expand_nested_invocations() {
 # Apply the configured style to nested MyCE references without changing their text.
 function colorize_nested_references() {
     local value="$1"
+    local after_style="${2:-$ANSI_GREEN}"
 
     if [[ "$NO_ANSI" == true ]]; then
         printf '%s' "$value"
         return
     fi
 
-    printf '%s' "$value" | sed "s/\\\${[^}]*}/${ANSI_MAGENTA}&${ANSI_GREEN}/g"
+    printf '%s' "$value" | sed "s/\\\${[^}]*}/${ANSI_MAGENTA}&${after_style}/g"
 }
 
 while getopts 'dvc' option; do
@@ -910,30 +911,32 @@ function runCMD() {
 
             # Output SRC line if available
             if [[ -n "$source_location" ]]; then
-                log 0 "${ANSI_CYAN}SRC:${ANSI_RESET} ${source_location}"
+                log 0 "${ANSI_CYAN}SRC:${ANSI_RESET} ${ANSI_BOLD}${ANSI_BLUE}${source_location}${ANSI_RESET}"
             fi
 
             # Output DESC line if available
             if [[ -n "$desc" ]]; then
-                log 0 "${ANSI_YELLOW}DESC:${ANSI_RESET} ${desc}"
+                log 0 "${ANSI_YELLOW}DESC:${ANSI_RESET} ${ANSI_BOLD}${ANSI_YELLOW}${desc}${ANSI_RESET}"
             fi
         fi
 
         # Build the dry-run command string and escape special control characters
-        dryCMD="${ANSI_GREEN}CMD:${ANSI_RESET} $cmd_string"
+        local dry_cmd_value="$cmd_string"
         # Append remaining arguments if any
         if [[ $# -gt 0 ]]; then
-            dryCMD="$dryCMD $*"
+            dry_cmd_value="$dry_cmd_value $*"
         fi
         # Escape raw backslash-escaped sequences so they are printed literally
-        dryCMD="${dryCMD//\\n/\\\\n}"
-        dryCMD="${dryCMD//\\r/\\\\r}"
-        dryCMD="${dryCMD//\\t/\\\\t}"
-        dryCMD="${dryCMD//\\e/\\\\e}"
+        dry_cmd_value="${dry_cmd_value//\\n/\\\\n}"
+        dry_cmd_value="${dry_cmd_value//\\r/\\\\r}"
+        dry_cmd_value="${dry_cmd_value//\\t/\\\\t}"
+        dry_cmd_value="${dry_cmd_value//\\e/\\\\e}"
         # Escape actual control characters that may be present in the command string
-        dryCMD="${dryCMD//$'\r'/\\r}"
-        dryCMD="${dryCMD//$'\n'/\\n}"
-        dryCMD="${dryCMD//$'\t'/\\t}"
+        dry_cmd_value="${dry_cmd_value//$'\r'/\\r}"
+        dry_cmd_value="${dry_cmd_value//$'\n'/\\n}"
+        dry_cmd_value="${dry_cmd_value//$'\t'/\\t}"
+        dry_cmd_value="$(colorize_nested_references "$dry_cmd_value" "$ANSI_RESET")"
+        dryCMD="${ANSI_GREEN}CMD:${ANSI_RESET} ${dry_cmd_value}"
         printf '%s\n' "$dryCMD"
         return
     fi
