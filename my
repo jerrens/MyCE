@@ -2056,12 +2056,12 @@ function list_keys() {
 
                         if [[ "$show_descriptions" == true ]]; then
                             if [[ -n "$desc" ]]; then
-                                printf "%s  %s%s%s\n" "$word" "$ANSI_YELLOW" "$desc" "$ANSI_RESET"
+                                printf "%s%s%s  %s%s%s\n" "$ANSI_GREEN" "$word" "$ANSI_RESET" "$ANSI_YELLOW" "$desc" "$ANSI_RESET"
                             else
-                                printf "%s\n" "$word"
+                                printf "%s%s%s\n" "$ANSI_GREEN" "$word" "$ANSI_RESET"
                             fi
                         else
-                            printf "%s\n" "$word"
+                            printf "%s%s%s\n" "$ANSI_GREEN" "$word" "$ANSI_RESET"
                         fi
 
                         printf "  %s->%s %s\n" "$ANSI_YELLOW" "$ANSI_RESET" "$value"
@@ -2093,7 +2093,20 @@ function list_keys() {
 
                 # Try to use column utility if available and not in line view mode
                 if [[ "$use_column" == true ]] && [[ $(type -t column) == "file" ]]; then
-                    printf "%s\n" "${output_rows[@]}" | column -t -s "|"
+                    local formatted_rows
+                    formatted_rows="$(printf "%s\n" "${output_rows[@]}" | column -t -s "|")"
+                    while IFS= read -r formatted_row; do
+                        local row_key="$formatted_row"
+                        local row_remainder=""
+                        for word in $words; do
+                            if [[ "$formatted_row" == "$word"* ]]; then
+                                row_key="$word"
+                                row_remainder="${formatted_row:${#word}}"
+                                break
+                            fi
+                        done
+                        printf "%s%s%s%s\n" "$ANSI_GREEN" "$row_key" "$ANSI_RESET" "$row_remainder"
+                    done <<< "$formatted_rows"
                 else
                     # Fallback: use printf for manual formatting without column utility
                     # Find the longest key name for padding
@@ -2108,10 +2121,10 @@ function list_keys() {
                     for row in "${output_rows[@]}"; do
                         if [[ "$show_descriptions" == true && "$show_values" == true ]]; then
                             IFS='|' read -r key desc value <<< "$row"
-                            printf "%-${max_key_len}s  %s  %s\n" "$key" "$desc" "$value"
+                            printf "%s%-${max_key_len}s%s  %s  %s\n" "$ANSI_GREEN" "$key" "$ANSI_RESET" "$desc" "$value"
                         else
                             IFS='|' read -r key meta <<< "$row"
-                            printf "%-${max_key_len}s  %s\n" "$key" "$meta"
+                            printf "%s%-${max_key_len}s%s  %s\n" "$ANSI_GREEN" "$key" "$ANSI_RESET" "$meta"
                         fi
                     done
                 fi
