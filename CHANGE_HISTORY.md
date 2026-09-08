@@ -4,6 +4,9 @@
 
 * **Enhancement: Expanded Alias Definitions in `list`** - Added `my list -vv` to recursively expand referenced aliases in displayed command values
 * Kept `my list -v` output unchanged so alias references remain visible when inspecting the original definition
+* **Enhancement: ANSI Output Styling** - Added colorized output for list entries, dry-run previews, `definition`, and the trailing `@` shorthand, with distinct styling for paths, descriptions, values, and references
+  * Added `--no-color` for one-time disabling and `MYCE_NO_ANSI` for persistent user-level disabling
+  * Completion scripts explicitly use `--no-color` when querying commands
 
 ## 26.9.1
 
