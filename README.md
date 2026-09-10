@@ -554,7 +554,7 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    my [OPTIONS] [help | version | set | list [-l] [-a] [-d] [-v] [PATTERN] | KEY [args...]] [?]
+    my [OPTIONS] [help | version | set | list [-l] [-a] [-d] [-v] [-vv] [PATTERN] | KEY [args...]] [?]
 
         <KEY> [...args]             The key of the command to run
 
@@ -563,6 +563,7 @@ USAGE:
                                     Include the '-a' arg to include variables (uppercase)
                                     Include the '-d' arg to show descriptions.  Implies '-l'
                                     Include the '-v' arg to include alias values.
+                                    Include the '-vv' arg to recursively expand referenced aliases in values.
                                     Include a PATTERN to filter the results.
                                         Use grep pattern syntax (e.g., \`my list prod\`)
 
@@ -585,6 +586,8 @@ USAGE:
         -c      Run the command without sourcing the default shell rc file
         -v      Verbose Level (Multiple may be given to increase the verbosity)
         -d      Dry Run.  A trailing '?' may also be used as a special syntax to enable dry-run mode.
+        --no-color
+          Disable ANSI color output for this invocation
 
 
  By: Jerren Saunders
@@ -657,6 +660,10 @@ pod.con                   podman exec --interactive --tty ...
 pod.ls                    ${pod.CONTAINER_EXE} ps --all --format "table  {{.Image}}  {{.RunningFor}}  {{.Status}}  {{.Names}}  "
 pod.log                   ${pod.CONTAINER_EXE} logs -f
 ```
+
+Use `-vv` instead of `-v` when you want referenced aliases such as `${pod.CONTAINER_EXE}` to be expanded in the displayed values. The second `v` is specific to the `list` action; global options such as `my -vv list` still control diagnostic verbosity.
+
+MyCE uses ANSI colors in interactive output to distinguish command names, file paths, descriptions, definitions, and referenced variables or aliases. ANSI color is automatically omitted when output is redirected or piped.
 
 If you remember part of the command, add a grep pattern as an option filter the responses
 
@@ -756,6 +763,23 @@ To always disable sourcing the shell rc file, see [MYCE_RUNCOM](#myce_runcom).
 ```shell
 my -c build
 ```
+
+### `--no-color`
+
+Disable ANSI color output for a single invocation:
+
+```shell
+my --no-color list -d pod
+my --no-color pod.con ?
+```
+
+To permanently disable ANSI color output for your user account, set `MYCE_NO_ANSI` in your shell startup file:
+
+```shell
+export MYCE_NO_ANSI=1
+```
+
+This setting applies to list output, dry-run previews, `definition`, and the trailing `@` shorthand. Completion scripts also request no-color output automatically.
 
 ### Shorthand Suffixes
 
@@ -985,6 +1009,18 @@ Optional environment variables may be defined to override default values for MyC
 These variables should be set for the current session by using `export <VARIABLE>=<VALUE>`
 or permanently by defining in `.bashrc` or `.zshrc`.
 
+MyCE also recognizes a reserved metadata section named `[MYCE]` in any discovered `.myCommands` file. That section is parsed as configuration metadata only and is not registered as a command namespace. The supported keys mirror the existing environment-variable knobs:
+
+```ini
+[MYCE]
+NO_ANSI=true
+FILE_NAME=.myCommands
+COLUMN_WIDTH=120
+RUNCOM=~/.bashrc
+```
+
+These values are applied as file-sourced defaults. If the equivalent `MYCE_*` environment variable is already present in the process environment, that environment value remains authoritative and overrides the `[MYCE]` file value for the current invocation.
+
 ### `MYCE_FILE_NAME`
 
 By default, MyCE will load command definitions from `.myCommands` files in the current directory tree.
@@ -1004,6 +1040,16 @@ Set the value of this variable to `false` if you do not want to source any rc fi
 Related to the `-c` [command line option](#options)
 
 To debug, either view verbose help (`my -vv help`) or search the output of a verbose command execution for the variable name (`my -vvv echo "Hello" | grep "MYCE_RUNCOM"`)
+
+### `MYCE_NO_ANSI`
+
+Set this variable to any non-empty value to permanently disable ANSI color output for your user account. It can be set in `.bashrc` or `.zshrc`:
+
+```shell
+export MYCE_NO_ANSI=1
+```
+
+Use [`--no-color`](#no-color) when color should be disabled only for one invocation.
 
 
 

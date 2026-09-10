@@ -1,5 +1,14 @@
 # Change History
 
+## 26.9.8
+
+* **Enhancement: Reserved `[MYCE]` Metadata Section** - Added support for a dedicated `[MYCE]` section in `.myCommands` files. Keys in the section are treated as configuration metadata only, and never enter the normal command registry. Supported keys are the documented environment-variable aliases `NO_ANSI`, `FILE_NAME`, `COLUMN_WIDTH`, and `RUNCOM`, using the same semantics as `MYCE_NO_ANSI`, `MYCE_FILE_NAME`, `MYCE_COLUMN_WIDTH`, and `MYCE_RUNCOM`. When an equivalent `MYCE_*` environment variable is already set, that environment value remains highest-precedence.
+* **Enhancement: Expanded Alias Definitions in `list`** - Added `my list -vv` to recursively expand referenced aliases in displayed command values
+* Kept `my list -v` output unchanged so alias references remain visible when inspecting the original definition
+* **Enhancement: ANSI Output Styling** - Added colorized output for list entries, dry-run previews, `definition`, and the trailing `@` shorthand, with distinct styling for paths, descriptions, values, and references
+  * Added `--no-color` for one-time disabling and `MYCE_NO_ANSI` for persistent user-level disabling
+  * Completion scripts explicitly use `--no-color` when querying commands
+
 ## 26.9.1
 
 * **Shell-Aware Update Completion Setup** - `my update` now detects the active shell more reliably and installs the correct auto-completion for zsh or bash, even when launched through `sudo` or from a non-default shell session

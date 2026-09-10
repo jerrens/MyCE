@@ -9,6 +9,29 @@ test_cases = {
         "see": ".*",  # Should produce output with verbosity
         "description": "Test single -v verbosity flag"
     },
+
+    # ANSI color controls
+    "--no-color list": {
+        "cmd": "--no-color list -v alias.nestedChainA",
+        "see": "(?!.*\\x1b).*alias\\.nestedChainA.*->",
+        "description": "Test --no-color disables ANSI output while preserving list output"
+    },
+    "MYCE_NO_ANSI list": {
+        "pre": "MYCE_NO_ANSI=1",
+        "cmd": "list -v alias.nestedChainA",
+        "see": "(?!.*\\x1b).*alias\\.nestedChainA.*->",
+        "description": "Test MYCE_NO_ANSI disables ANSI output while preserving list output"
+    },
+    "MYCE section metadata is ignored in command lists": {
+        "cmd": "list -a -l",
+        "see": "(?s)(?!.*MYCE\\.NO_ANSI)(?!.*MYCE\\.FILE_NAME)(?!.*MYCE\\.COLUMN_WIDTH).*",
+        "description": "Test [MYCE] keys remain metadata-only and never appear as command keys"
+    },
+    "help shows effective runtime values": {
+        "cmd": "help",
+        "see": "Runtime Configuration:.*NO_ANSI=.*MY_CUSTOM_FILE=.*COLUMN_WIDTH=.*MYCE_RUNCOM=.*",
+        "description": "Test help output now displays the effective configuration values for troubleshooting"
+    },
     "-vv list": {
         "cmd": "-vv list",
         "see": ".*",  # Should produce output with increased verbosity

@@ -13,7 +13,7 @@
 # for f in /etc/bash_completion.d/*; do source "/etc/bash_completion.d/$f"; done
 
 _my_autocomplete() {
-    _cmds=$(my list)
+    _cmds=$(my --no-color list)
 
     local cur
     COMPREPLY=()
@@ -43,7 +43,7 @@ _my_autocomplete() {
 
         case "${cur_action}" in
             definition)
-                _all_cmds=$(my list -a)
+                _all_cmds=$(my --no-color list -a)
                 COMPREPLY=( $(compgen -W "${_all_cmds}" -- "${cur}") )
                 return 0;;
 

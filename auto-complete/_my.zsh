@@ -14,7 +14,7 @@ _my() {
     log "words: $words"
 
     # Remove banner + trim whitespace in one go
-    cmds=("${(@f)$(my list | tail -n +2)}")
+    cmds=("${(@f)$(my --no-color list | tail -n +2)}")
     cmds=("${cmds[@]//(#s)[[:space:]]##/}")
 
     local curcontext="$curcontext" state line
@@ -44,7 +44,7 @@ _my() {
                     ;;
                 definition)
                     local -a all_cmds
-                    all_cmds=("${(@f)$(my list -a | tail -n +2)}")
+                    all_cmds=("${(@f)$(my --no-color list -a | tail -n +2)}")
                     all_cmds=("${all_cmds[@]//(#s)[[:space:]]##/}")
                     log "definition completions: ${all_cmds[@]}"
                     compadd -- "${all_cmds[@]}"

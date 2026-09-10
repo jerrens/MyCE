@@ -8,7 +8,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.9.1
+__Version=26.9.8
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -64,6 +64,7 @@ USAGE:
                                     Include the '-a' arg to include variables (uppercase)
                                     Include the '-d' arg to show descriptions for each command.
                                     Include the '-v' arg to include alias values.
+                                      Use '-vv' to expand referenced aliases in values.
                                     Include a PATTERN to filter the results.
                                         Use grep pattern syntax (e.g., \`my list prod\`)
 
@@ -89,6 +90,8 @@ USAGE:
         -c      Run the command without sourcing the default shell rc file
         -v      Verbose Level (Multiple may be given to increase the verbosity)
         -d      Dry Run.  A trailing '?' may also be used as a special syntax to enable dry-run mode.
+        --no-color
+            Disable ANSI color output for this invocation
 
 
 EOT
@@ -110,14 +113,65 @@ EOT
     log 2 "  ShellRC: ${MYCE_RUNCOM}"
     log 2 ""
 
+    # Surface the effective runtime values in normal help output for troubleshooting.
+    log 0 "Runtime Configuration:"
+    log 0 "  NO_ANSI=${NO_ANSI}"
+    log 0 "  MY_CUSTOM_FILE=${MY_CUSTOM_FILE}"
+    log 0 "  COLUMN_WIDTH=${COLUMN_WIDTH:-FULL}"
+    log 0 "  MYCE_RUNCOM=${MYCE_RUNCOM}"
+
 }
 
 # Default Settings
 VERBOSE=0
 DRYRUN=false
 DEFINITION_PREVIEW=false
+NO_ANSI=${MYCE_NO_ANSI:+true}
+NO_ANSI=${NO_ANSI:-false}
 MY_CUSTOM_FILE=${MYCE_FILE_NAME:-.myCommands}
 COLUMN_WIDTH=${MYCE_COLUMN_WIDTH:-120} # If set to 'FULL', then the full terminal width will be used
+
+# Centralized ANSI styles. Set NO_ANSI=true to disable all styles for this invocation.
+ANSI_RESET=$'\033[0m'
+ANSI_BOLD=$'\033[1m'
+ANSI_DIM=$'\033[2m'
+ANSI_ITALIC=$'\033[3m'
+ANSI_CYAN=$'\033[36m'
+ANSI_BLUE=$'\033[34m'
+ANSI_YELLOW=$'\033[33m'
+ANSI_GREEN=$'\033[32m'
+ANSI_MAGENTA=$'\033[35m'
+ANSI_RED=$'\033[31m'
+
+function __apply_ansi_state() {
+    if [[ "$NO_ANSI" == true ]]; then
+        ANSI_RESET=""
+        ANSI_BOLD=""
+        ANSI_DIM=""
+        ANSI_ITALIC=""
+        ANSI_CYAN=""
+        ANSI_BLUE=""
+        ANSI_YELLOW=""
+        ANSI_GREEN=""
+        ANSI_MAGENTA=""
+        ANSI_RED=""
+    else
+        ANSI_RESET=$'\033[0m'
+        ANSI_BOLD=$'\033[1m'
+        ANSI_DIM=$'\033[2m'
+        ANSI_ITALIC=$'\033[3m'
+        ANSI_CYAN=$'\033[36m'
+        ANSI_BLUE=$'\033[34m'
+        ANSI_YELLOW=$'\033[33m'
+        ANSI_GREEN=$'\033[32m'
+        ANSI_MAGENTA=$'\033[35m'
+        ANSI_RED=$'\033[31m'
+    fi
+}
+
+if [[ "$NO_ANSI" == true ]]; then
+    __apply_ansi_state
+fi
 
 if [[ -n "${__Shell}" ]] && [ "${__Shell}" != "false" ]; then
     SHELL_RC="$HOME/.${__Shell}rc"
@@ -136,6 +190,33 @@ if [[ "${COLUMN_WIDTH}" == "FULL" ]]; then
     unset COLUMN_WIDTH
 fi
 
+# Long options are handled before getopts so they can appear before the command.
+__my_filtered_args=()
+for __my_arg in "$@"; do
+    if [[ "$__my_arg" == "--no-color" ]]; then
+        NO_ANSI=true
+    else
+        __my_filtered_args+=("$__my_arg")
+    fi
+done
+set -- "${__my_filtered_args[@]}"
+
+# Avoid emitting escape sequences into redirected or piped output.
+if [[ ! -t 1 && ! -t 2 ]]; then
+    NO_ANSI=true
+fi
+if [[ "$NO_ANSI" == true ]]; then
+    ANSI_RESET=""
+    ANSI_BOLD=""
+    ANSI_DIM=""
+    ANSI_ITALIC=""
+    ANSI_CYAN=""
+    ANSI_BLUE=""
+    ANSI_YELLOW=""
+    ANSI_GREEN=""
+    ANSI_MAGENTA=""
+    ANSI_RED=""
+fi
 
 # Prints log message to the terminal
 # Level 0 are considered "important" messages and will be printed to stdout, while levels 1 and above are considered "debug" messages and will be printed to stderr
@@ -144,12 +225,19 @@ fi
 function log() {
     local lvl=$1
     local msg=$2
+    local log_style=""
+
+    case "$lvl" in
+        1) log_style="$ANSI_CYAN" ;;
+        2) log_style="$ANSI_BLUE" ;;
+        3) log_style="$ANSI_DIM" ;;
+    esac
 
     if (( lvl <= VERBOSE )); then
         if (( lvl == 0 )); then
             echo -e "$msg"
         else
-            echo -e "$msg" >&2
+            echo -e "${log_style}${msg}${ANSI_RESET}" >&2
         fi
     fi
 }
@@ -783,6 +871,19 @@ function __expand_nested_invocations() {
     return 0
 }
 
+# Apply the configured style to nested MyCE references without changing their text.
+function colorize_nested_references() {
+    local value="$1"
+    local after_style="${2:-$ANSI_GREEN}"
+
+    if [[ "$NO_ANSI" == true ]]; then
+        printf '%s' "$value"
+        return
+    fi
+
+    printf '%s' "$value" | sed "s/\\\${[^}]*}/${ANSI_MAGENTA}&${after_style}/g"
+}
+
 while getopts 'dvc' option; do
     # echo "Option: ${option}"
     case ${option} in
@@ -834,30 +935,32 @@ function runCMD() {
 
             # Output SRC line if available
             if [[ -n "$source_location" ]]; then
-                log 0 "SRC: ${source_location}"
+                log 0 "${ANSI_CYAN}SRC:${ANSI_RESET} ${ANSI_BOLD}${ANSI_BLUE}${source_location}${ANSI_RESET}"
             fi
 
             # Output DESC line if available
             if [[ -n "$desc" ]]; then
-                log 0 "DESC: ${desc}"
+                log 0 "${ANSI_YELLOW}DESC:${ANSI_RESET} ${ANSI_BOLD}${ANSI_YELLOW}${desc}${ANSI_RESET}"
             fi
         fi
 
         # Build the dry-run command string and escape special control characters
-        dryCMD="CMD: $cmd_string"
+        local dry_cmd_value="$cmd_string"
         # Append remaining arguments if any
         if [[ $# -gt 0 ]]; then
-            dryCMD="$dryCMD $*"
+            dry_cmd_value="$dry_cmd_value $*"
         fi
         # Escape raw backslash-escaped sequences so they are printed literally
-        dryCMD="${dryCMD//\\n/\\\\n}"
-        dryCMD="${dryCMD//\\r/\\\\r}"
-        dryCMD="${dryCMD//\\t/\\\\t}"
-        dryCMD="${dryCMD//\\e/\\\\e}"
+        dry_cmd_value="${dry_cmd_value//\\n/\\\\n}"
+        dry_cmd_value="${dry_cmd_value//\\r/\\\\r}"
+        dry_cmd_value="${dry_cmd_value//\\t/\\\\t}"
+        dry_cmd_value="${dry_cmd_value//\\e/\\\\e}"
         # Escape actual control characters that may be present in the command string
-        dryCMD="${dryCMD//$'\r'/\\r}"
-        dryCMD="${dryCMD//$'\n'/\\n}"
-        dryCMD="${dryCMD//$'\t'/\\t}"
+        dry_cmd_value="${dry_cmd_value//$'\r'/\\r}"
+        dry_cmd_value="${dry_cmd_value//$'\n'/\\n}"
+        dry_cmd_value="${dry_cmd_value//$'\t'/\\t}"
+        dry_cmd_value="$(colorize_nested_references "$dry_cmd_value" "$ANSI_RESET")"
+        dryCMD="${ANSI_GREEN}CMD:${ANSI_RESET} ${dry_cmd_value}"
         printf '%s\n' "$dryCMD"
         return
     fi
@@ -1149,6 +1252,7 @@ function trim() {
 function process_ini_file() {
     log 1 "Loading file: $1"
     local filepath="$1"
+    local in_myce_section=false
 
     # Detect the line break character for this file (LF vs CRLF) and warn the user if it is not LF
     if grep --quiet $'\r' --max-count 1 "$1"; then
@@ -1399,7 +1503,56 @@ function process_ini_file() {
         # Check for section headers (allow leading indentation, common in conditional blocks)
         if [[ "$line" =~ ^[[:space:]]*\[([^][]+)\][[:space:]]*$ ]]; then
             section="${BASH_REMATCH[1]}"
-            log 2 "Section Header detected: $section"
+            in_myce_section=false
+            if [[ "$section" == "MYCE" ]]; then
+                in_myce_section=true
+                log 2 "Reserved [MYCE] metadata section detected"
+            else
+                log 2 "Section Header detected: $section"
+            fi
+            continue
+        fi
+
+        # Reserved metadata section: consume only a tiny allowlist and never store
+        # keys as ordinary command definitions. This allows project-local or user-level
+        # config without polluting the command namespace.
+        if [[ "$in_myce_section" == true ]]; then
+            IFS='=' read -r key value <<< "$line"
+            key="${key#"${key%%[![:space:]]*}"}"
+            key="${key%"${key##*[![:space:]]}"}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+
+            case "$key" in
+                NO_ANSI)
+                    if [[ -z "${MYCE_NO_ANSI:-}" && "${NO_ANSI}" != true ]]; then
+                        case "${value,,}" in
+                            true|yes|1|on) NO_ANSI=true ;;
+                            false|no|0|off|empty) NO_ANSI=false ;;
+                            *) NO_ANSI=false ;;
+                        esac
+                        __apply_ansi_state
+                    fi
+                    ;;
+                FILE_NAME)
+                    if [[ -z "${MYCE_FILE_NAME:-}" ]]; then
+                        MY_CUSTOM_FILE="$value"
+                    fi
+                    ;;
+                COLUMN_WIDTH)
+                    if [[ -z "${MYCE_COLUMN_WIDTH:-}" ]]; then
+                        COLUMN_WIDTH="$value"
+                        if [[ "${COLUMN_WIDTH}" == "FULL" ]]; then
+                            unset COLUMN_WIDTH
+                        fi
+                    fi
+                    ;;
+                RUNCOM)
+                    if [[ -z "${MYCE_RUNCOM:-}" ]]; then
+                        MYCE_RUNCOM="$value"
+                    fi
+                    ;;
+            esac
             continue
         fi
 
@@ -1879,6 +2032,7 @@ function list_keys() {
     local include_const=false
     local show_descriptions=false
     local show_values=false
+    local expand_values=false
     local filter_pattern=""
 
     # Normalize values/descriptions for list output to keep one command per line.
@@ -1907,6 +2061,10 @@ function list_keys() {
 
             "-v")
                 show_values=true;;
+
+            "-vv")
+                show_values=true
+                expand_values=true;;
 
             *)
                 filter_pattern="$1";;
@@ -1962,17 +2120,25 @@ function list_keys() {
                         desc="$(normalize_list_meta "$desc")"
                         value="$(normalize_list_meta "$value")"
 
-                        if [[ "$show_descriptions" == true ]]; then
-                            if [[ -n "$desc" ]]; then
-                                printf "%s  %s\n" "$word" "$desc"
-                            else
-                                printf "%s\n" "$word"
-                            fi
-                        else
-                            printf "%s\n" "$word"
+                        if [[ "$expand_values" == true ]]; then
+                            __expand_nested_invocations "$value"
+                            value="$__nested_expanded_cmd"
+                            value="$(normalize_list_meta "$value")"
                         fi
 
-                        printf "  -> %s\n" "$value"
+                        value="$(colorize_nested_references "$value" "$ANSI_RESET")"
+
+                        if [[ "$show_descriptions" == true ]]; then
+                            if [[ -n "$desc" ]]; then
+                                printf "%s%s%s  %s%s%s\n" "$ANSI_GREEN" "$word" "$ANSI_RESET" "$ANSI_YELLOW" "$desc" "$ANSI_RESET"
+                            else
+                                printf "%s%s%s\n" "$ANSI_GREEN" "$word" "$ANSI_RESET"
+                            fi
+                        else
+                            printf "%s%s%s\n" "$ANSI_GREEN" "$word" "$ANSI_RESET"
+                        fi
+
+                        printf "  %s->%s %s\n" "$ANSI_YELLOW" "$ANSI_RESET" "$value"
                     done <<< "$words"
 
                     return 0
@@ -1986,6 +2152,10 @@ function list_keys() {
                     desc="$(normalize_list_meta "$desc")"
                     value="$(normalize_list_meta "$value")"
 
+                    if [[ -n "$desc" ]]; then
+                        desc="${ANSI_YELLOW}${desc}${ANSI_RESET}"
+                    fi
+
                     if [[ "$show_descriptions" == true && "$show_values" == true ]]; then
                         output_rows+=("$word|$desc|$value")
                     elif [[ "$show_descriptions" == true ]]; then
@@ -1997,7 +2167,20 @@ function list_keys() {
 
                 # Try to use column utility if available and not in line view mode
                 if [[ "$use_column" == true ]] && [[ $(type -t column) == "file" ]]; then
-                    printf "%s\n" "${output_rows[@]}" | column -t -s "|"
+                    local formatted_rows
+                    formatted_rows="$(printf "%s\n" "${output_rows[@]}" | column -t -s "|")"
+                    while IFS= read -r formatted_row; do
+                        local row_key="$formatted_row"
+                        local row_remainder=""
+                        for word in $words; do
+                            if [[ "$formatted_row" == "$word"* ]]; then
+                                row_key="$word"
+                                row_remainder="${formatted_row:${#word}}"
+                                break
+                            fi
+                        done
+                        printf "%s%s%s%s\n" "$ANSI_GREEN" "$row_key" "$ANSI_RESET" "$row_remainder"
+                    done <<< "$formatted_rows"
                 else
                     # Fallback: use printf for manual formatting without column utility
                     # Find the longest key name for padding
@@ -2012,10 +2195,10 @@ function list_keys() {
                     for row in "${output_rows[@]}"; do
                         if [[ "$show_descriptions" == true && "$show_values" == true ]]; then
                             IFS='|' read -r key desc value <<< "$row"
-                            printf "%-${max_key_len}s  %s  %s\n" "$key" "$desc" "$value"
+                            printf "%s%-${max_key_len}s%s  %s  %s\n" "$ANSI_GREEN" "$key" "$ANSI_RESET" "$desc" "$value"
                         else
                             IFS='|' read -r key meta <<< "$row"
-                            printf "%-${max_key_len}s  %s\n" "$key" "$meta"
+                            printf "%s%-${max_key_len}s%s  %s\n" "$ANSI_GREEN" "$key" "$ANSI_RESET" "$meta"
                         fi
                     done
                 fi
@@ -2087,7 +2270,20 @@ function get_key_definition() {
     while IFS= read -r entry; do
         [[ -z "$entry" ]] && continue
         IFS='|' read -r location desc value <<< "$entry"
-        log 0 "${location}|${display_key}|${desc}|${value//\\n/\\\\n}" | eval "${columnCMD}"
+        value="${value//\\n/\\\\n}"
+        if [[ "$NO_ANSI" == true ]]; then
+            log 0 "${location}|${display_key}|${desc}|${value}" | eval "${columnCMD}"
+        else
+            local location_file="${location%:*}"
+            local location_line="${location##*:}"
+            value="$(colorize_nested_references "$value" "$ANSI_RESET")"
+            printf "%s%s%s:%s%s%s\t%s%s%s\t%s%s%s\t%s%s%s\n" \
+                "$ANSI_BLUE" "$location_file" "$ANSI_RESET" \
+                "$ANSI_CYAN" "$location_line" "$ANSI_RESET" \
+                "$ANSI_BOLD$ANSI_GREEN" "$display_key" "$ANSI_RESET" \
+                "$ANSI_YELLOW" "$desc" "$ANSI_RESET" \
+                "" "$value" ""
+        fi
     done <<< "$all_entries"
 
     log 2 "" # Add spacing in verbose mode
