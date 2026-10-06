@@ -1,5 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # spell-checker:words dzdo sdiff MyCE mkfifo stty fflush
+
+# MyCE requires Bash 4 or newer. macOS versions commonly provide Bash 3.2,
+# which cannot handle the associative arrays and other features used below.
+if [[ -n "${BASH_VERSION:-}" ]] && (( BASH_VERSINFO[0] < 4 )); then
+    echo "MyCE requires Bash 4 or newer. On macOS, install a newer Bash with Homebrew:" >&2
+    echo "  brew install bash" >&2
+    echo "Then run MyCE with the newer Bash, for example: /opt/homebrew/bin/bash my ..." >&2
+    exit 1
+fi
 
 # Save original IFS at script start
 __MYCE_ORIGINAL_IFS="$IFS"
@@ -8,7 +17,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.9.8
+__Version=26.10.6
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -1255,7 +1264,7 @@ function process_ini_file() {
     local in_myce_section=false
 
     # Detect the line break character for this file (LF vs CRLF) and warn the user if it is not LF
-    if grep --quiet $'\r' --max-count 1 "$1"; then
+    if grep -q $'\r' "$1"; then
         log 0 "\e[1;31mWARNING: Detected CRLF line endings in file '$1'.\nThis will cause issues when parsing and will be skipped.  Please convert the file to LF line breaks.\n\e[0m"
         return 1
     fi
@@ -2608,7 +2617,7 @@ function update_script() {
 
     # Move 'my' and make it executable
     log 1 "Installing to ${install_path}..."
-    runCMD mv --force "/tmp/${archive_root}/my" "${install_path}"
+    runCMD mv -f "/tmp/${archive_root}/my" "${install_path}"
     log 1 "\nModifying permissions..."
     runCMD chmod a+x "${install_path}"
 
