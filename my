@@ -17,7 +17,7 @@ __MYCE_ORIGINAL_IFS="$IFS"
 trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.10.6
+__Version=26.10.21
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -64,16 +64,17 @@ This can be used to allow local overriding of certain commands to point to a con
 instead of the local installed command.
 
 USAGE:
-    ${__ScriptName} [OPTIONS] [help | version | set | list [-l] [-a] [-d] [-v] [PATTERN] | KEY [args...]] [?]
+    ${__ScriptName} [OPTIONS] [help | version | set | list [-l|--list] [-a|--all] [-d|--descriptions] [-v|--values] [--values-expanded] [PATTERN] | KEY [args...]] [?|@]
 
         <KEY> [...args]             The key of the command to run
 
-        list [-l] [-a] [-d] [-v] [PATTERN]  List the available command keys.
-                                    Include the '-l' arg to list one key per line.  Default is column view.
-                                    Include the '-a' arg to include variables (uppercase)
-                                    Include the '-d' arg to show descriptions for each command.
-                                    Include the '-v' arg to include alias values.
-                                      Use '-vv' to expand referenced aliases in values.
+        list [-l|--list] [-a|--all] [-d|--descriptions] [-v|--values] [--values-expanded] [PATTERN]
+                                    List the available command keys.
+                                    Include '-l' or '--list' to list one key per line. Default is column view.
+                                    Include '-a' or '--all' to include variables (uppercase).
+                                    Include '-d' or '--descriptions' to show descriptions for each command.
+                                    Include '-v' or '--values' to include alias values.
+                                        Use '-vv' or '--values-expanded' to expand referenced aliases in values.
                                     Include a PATTERN to filter the results.
                                         Use grep pattern syntax (e.g., \`my list prod\`)
 
@@ -92,7 +93,7 @@ USAGE:
         @                           If the command ends with an '@' character, then definition preview mode will be enabled.
                                     This shows where the command is defined in the .myCommands files.
 
-        help                        Show usage
+        help|--help                 Show usage
         version                     Show version number
 
     OPTIONS:
@@ -201,10 +202,20 @@ fi
 
 # Long options are handled before getopts so they can appear before the command.
 __my_filtered_args=()
+__my_help_requested=false
+__my_options_ended=false
 for __my_arg in "$@"; do
     if [[ "$__my_arg" == "--no-color" ]]; then
         NO_ANSI=true
+    elif [[ "$__my_options_ended" == false && "$__my_arg" == "--help" ]]; then
+        __my_help_requested=true
+    elif [[ "$__my_options_ended" == false && "$__my_arg" == "--" ]]; then
+        __my_options_ended=true
+        __my_filtered_args+=("$__my_arg")
     else
+        if [[ "$__my_options_ended" == false && "$__my_arg" != -* ]]; then
+            __my_options_ended=true
+        fi
         __my_filtered_args+=("$__my_arg")
     fi
 done
@@ -905,6 +916,11 @@ while getopts 'dvc' option; do
     esac
 done
 shift $((OPTIND -1)) # Remaining args will be left
+
+# Set this flag to true if the user requested help via --help, so that the main command can handle it appropriately.
+if [[ "$__my_help_requested" == true ]]; then
+    set -- --help
+fi
 
 
 # Check for the last arg to be a '?' (special dry run syntax)
@@ -2059,22 +2075,44 @@ function list_keys() {
     # Check for args
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            # Handle help flag
+            "--help")
+                print_usage true
+                return 0;;
+
+            # Handle list flag (no column formatting) of -l and --list
+            "--list")
+                use_column=false;;
             "-l")
                 use_column=false;;
 
+            # Handle include constants flag (show uppercase variable keys) of -a and --all
+            "--all")
+                include_const=true;;
             "-a")
                 include_const=true;;
 
+            # Handle show descriptions flag (show descriptions) of -d and --descriptions
+            "--descriptions")
+                show_descriptions=true;;
             "-d")
                 show_descriptions=true;;
 
+            # Handle show values flag (show values) of -v and --values
+            "--values")
+                show_values=true;;
             "-v")
                 show_values=true;;
 
+            # Handle show values flag (show values) of -vv and --values-expanded
+            "--values-expanded")
+                show_values=true
+                expand_values=true;;
             "-vv")
                 show_values=true
                 expand_values=true;;
-
+            
+            # Handle filter pattern (partial word)
             *)
                 filter_pattern="$1";;
         esac
@@ -2665,7 +2703,7 @@ function main() {
             exit 1
             ;;
 
-        help)
+        help|--help)
             print_usage true
             exit 0
             ;;
