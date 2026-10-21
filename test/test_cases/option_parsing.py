@@ -32,6 +32,16 @@ test_cases = {
         "see": "Runtime Configuration:.*NO_ANSI=.*MY_CUSTOM_FILE=.*COLUMN_WIDTH=.*MYCE_RUNCOM=.*",
         "description": "Test help output now displays the effective configuration values for troubleshooting"
     },
+    "--help": {
+        "cmd": "--help",
+        "see": "USAGE:",
+        "description": "Test --help is passed through to main dispatch"
+    },
+    "list --help": {
+        "cmd": "list --help",
+        "see": "(?s)^(?!.*Usage: grep).*USAGE:",
+        "description": "Test list --help shows MyCE usage instead of treating it as a grep pattern"
+    },
     "-vv list": {
         "cmd": "-vv list",
         "see": ".*",  # Should produce output with increased verbosity
