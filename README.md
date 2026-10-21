@@ -65,6 +65,20 @@ Conditionals are evaluated after all files are loaded, so child-directory variab
     chmod a+rx /usr/local/sbin/my
     ```
 
+### Installing the MyCE Agent Skill
+
+The repository includes a MyCE skill for coding agents at `.agents/skills/myce/SKILL.md`.
+It explains how MyCE resolves hierarchical `.myCommands` aliases, how to discover and preview definitions, and how to use aliases safely without assuming that `my` runs commands in a container.
+
+To install the skill in your user-level agent skills directory, run this from the repository root:
+
+```bash
+mkdir -p ~/.agents/skills/myce/
+cp .agents/skills/myce/SKILL.md ~/.agents/skills/myce/
+```
+
+This copies the skill to `~/.agents/skills/myce/SKILL.md`, making it available to agents that load user-level skills. This is separate from installing the MyCE `my` command-line script.
+
 
 1. **Create `.myCommands` files**:
     Add a `.myCommands` file in the root directories of your projects.
