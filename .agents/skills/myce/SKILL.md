@@ -3,6 +3,8 @@ name: myce
 description: "Use MyCE (`my`) to discover and run hierarchical `.myCommands` aliases, preview or inspect definitions, manage aliases, or handle development-tool commands. MyCE falls back to the shell when no alias matches."
 argument-hint: 'Optional: provide the command you want rewritten or validated with MyCE'
 user-invocable: true
+metadata:
+	version: "26.10.21"
 ---
 
 # MyCE Command Scope
@@ -53,6 +55,7 @@ user-invocable: true
 - `my -d <alias>` previews an expanded command without running it; in zsh, escape the suffix as `\?` when using `my <alias> ?`.
 - `my set <key> <command>` writes to the current directory's MyCE command file; use it only when the user asks to add or change an alias.
 - `my update [diff] [latest|released|head|main|<TAG>]` downloads or installs MyCE updates and may require network access and elevated privileges; do not run it unless explicitly requested.
+- `my update agent-skill` installs or updates this skill in `~/.agents/skills/myce/SKILL.md`, using a local copy when available and otherwise downloading it from GitHub; network access is only needed for the download fallback, and elevated privileges are not required.
 
 ## Examples
 - `my test.report.main` is an example of a project-specific test alias; verify that it exists before use.

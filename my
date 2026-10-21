@@ -83,8 +83,9 @@ USAGE:
         set <key> <command>         Adds or updates the 'key' to the '${MY_CUSTOM_FILE}' file in the current directory.
                                     The given command will be used whenever called from this level or a descendant.
 
-        update [diff]               Update the script with the latest version.
-                                    If 'diff' is given, then show the changes
+        update [diff|agent-skill]   Update the script with the latest version,
+                                    or install/update the MyCE agent skill.
+                                    If 'diff' is given, then show the changes.
 
         ${shorthand_dryrun}                          If the command ends with a '${shorthand_dryrun%%[[:space:]]}' character, then dry-run mode will be enabled.
                                     This is a special syntax for dry-run mode that can be quickly used to check the command.
@@ -2563,8 +2564,70 @@ function configure_completion_for_shell() {
     esac
 }
 
+# Install or update the MyCE agent skill for the current user.
+function update_agent_skill() {
+    local skill_url="https://raw.githubusercontent.com/jerrens/MyCE/refs/heads/main/.agents/skills/myce/SKILL.md"
+    local destination="${HOME}/.agents/skills/myce/SKILL.md"
+    local local_skill="${PWD}/.agents/skills/myce/SKILL.md"
+    local temp_file
+
+    if [[ ! -f "${local_skill}" ]]; then
+        local_skill="${__AppDir}/.agents/skills/myce/SKILL.md"
+    fi
+
+    if [[ -z "${HOME}" ]]; then
+        log 0 "Cannot install the MyCE agent skill because HOME is not set."
+        return 1
+    fi
+
+    temp_file="$(mktemp)" || {
+        log 0 "Unable to create a temporary file for the MyCE agent skill."
+        return 1
+    }
+
+    if [[ -f "${local_skill}" ]]; then
+        log 1 "Installing MyCE agent skill from ${local_skill}..."
+        if ! cp "${local_skill}" "${temp_file}"; then
+            rm -f "${temp_file}"
+            log 0 "Failed to copy the local MyCE agent skill from ${local_skill}"
+            return 1
+        fi
+    else
+        log 1 "Downloading the latest MyCE agent skill..."
+        if ! curl --fail --location --silent --show-error --output "${temp_file}" "${skill_url}"; then
+            rm -f "${temp_file}"
+            log 0 "Failed to download the MyCE agent skill from ${skill_url}"
+            return 1
+        fi
+    fi
+
+    if [[ ! -s "${temp_file}" ]]; then
+        rm -f "${temp_file}"
+        log 0 "Downloaded MyCE agent skill is empty; not installing it."
+        return 1
+    fi
+
+    if ! mkdir -p "${HOME}/.agents/skills/myce" || ! install -m 644 "${temp_file}" "${destination}"; then
+        rm -f "${temp_file}"
+        log 0 "Failed to install the MyCE agent skill to ${destination}"
+        return 1
+    fi
+
+    rm -f "${temp_file}"
+    log 0 "MyCE agent skill installed to ${destination}"
+}
+
 # Update the script with the latest version
 function update_script() {
+    if [[ "${2,,}" == "agent-skill" ]]; then
+        if [[ $# -ne 2 ]]; then
+            log 0 "Usage: ${__ScriptName} update agent-skill"
+            return 1
+        fi
+        update_agent_skill
+        return $?
+    fi
+
     tag=released
 
     # Grab the options
