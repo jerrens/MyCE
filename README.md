@@ -65,6 +65,22 @@ Conditionals are evaluated after all files are loaded, so child-directory variab
     chmod a+rx /usr/local/sbin/my
     ```
 
+### Installing the MyCE Agent Skill
+
+The repository includes a MyCE skill for coding agents at `.agents/skills/myce/SKILL.md`.
+It explains how MyCE resolves hierarchical `.myCommands` aliases, how to discover and preview definitions, and how to use aliases safely without assuming that `my` runs commands in a container.
+
+To install the skill in your user-level agent skills directory, run this from the repository root:
+
+```bash
+mkdir -p ~/.agents/skills/myce/
+cp .agents/skills/myce/SKILL.md ~/.agents/skills/myce/
+```
+
+After MyCE is installed, run `my update agent-skill` to install or update the skill. The command uses the skill file from the current repository or alongside the `my` script when available; otherwise it downloads the latest version from GitHub.
+
+This copies the skill to `~/.agents/skills/myce/SKILL.md`, making it available to agents that load user-level skills. This is separate from installing the MyCE `my` command-line script.
+
 
 1. **Create `.myCommands` files**:
     Add a `.myCommands` file in the root directories of your projects.
@@ -572,7 +588,7 @@ USAGE:
         set <key> <command>         Adds or updates the 'key' to the '${MY_CUSTOM_FILE}' file in the current directory.
                                     The given command will be used whenever called from this level or a descendant.
 
-        update [diff]               Update the script with the latest version.
+        update [diff|agent-skill]   Update the script or install/update the agent skill.
                                     If 'diff' is given, then show the changes
 
         \?                          If the command ends with a '\?' character, then dry-run mode will be enabled.
@@ -689,12 +705,14 @@ The output will contain the full file path, line number, command reference (sect
 ```
 
 
-### `update [diff] [latest|released|head|main|<TAG>]`
+### `update [diff|agent-skill] [latest|released|head|main|<TAG>]`
 
 Easily pull down updates from the github repo.
 The file will automatically update the MyCE script (typically `/usr/local/bin`) and the permissions set to 755.
 This command needs to be run with root level privileges.
 If not, it will attempt to elevate itself and prompt for a password if needed.
+
+Use `my update agent-skill` to install or update the MyCE agent skill at `~/.agents/skills/myce/SKILL.md`. It prefers a local repository copy, falling back to the latest version on the main branch when no local copy is available. This updates only the skill and does not require elevated permissions.
 
 If you only want to view the changes (uses `sdiff`) between your local version and the latest version on GitHub, you can use `my update diff`.
 
