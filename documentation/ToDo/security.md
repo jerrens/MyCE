@@ -2,7 +2,7 @@
 
 ## Scope
 
-This report documents the security concerns identified in the reviewed `my` script and proposes mitigations that preserve MyCE's intended command-alias behavior. The review was read-only; no script changes were made.
+This report documents the security concerns identified in the reviewed `my` script, proposed mitigations, and remediation status. Finding 4 has been addressed in the current working tree; the other findings remain open.
 
 The referenced locations correspond to the current [`my`](../../my) script. Command definitions are shell programs by design, so `.myCommands` files should be treated as executable code and trusted accordingly. The findings below focus on cases where runtime arguments, configuration paths, or elevated update operations can cross that trust boundary.
 
@@ -54,7 +54,7 @@ This is conditional: sudo commonly filters environment variables, and policy may
 
 **Severity: Medium, platform-dependent**
 
-The update archive is downloaded to a predictable path under `/tmp`, derived from the application name and release tag, at [`my`, line 2660](../../my#L2660), and `wget` writes directly to that path at [`my`, line 2505](../../my#L2505). The update may proceed with elevated privileges after the re-execution at [`my`, lines 2697–2705](../../my#L2697). In a shared temporary directory, a pre-created path or race may redirect or interfere with privileged file operations, depending on operating-system protections and permissions.
+The update archive was downloaded to a predictable path under `/tmp`, derived from the application name and release tag, and `wget` wrote directly to that path. The update may proceed with elevated privileges after re-execution. In a shared temporary directory, a pre-created path or race could redirect or interfere with privileged file operations, depending on operating-system protections and permissions.
 
 **Mitigation proposal**
 
@@ -64,6 +64,13 @@ The update archive is downloaded to a predictable path under `/tmp`, derived fro
 - Treat download or extraction failure as fatal, and verify that required files exist before installation.
 - Clean up the private directory with a trap on success, failure, and interruption.
 - For stronger supply-chain assurance, verify a trusted release signature or checksum before installing the downloaded content.
+
+**Status: Addressed in the current working tree**
+
+- Both update and diff operations create a private temporary directory with `mktemp -d` and mode `700`; an exit trap removes it on completion or interruption ([`my`, lines 18–25](../../my#L18)).
+- Release tags are validated before they are used in archive URLs or paths. The downloaded archive is listed and the updater extracts only the expected script and shell-completion files into the private directory ([`my`, lines 2484–2575](../../my#L2484)).
+- Download, archive inspection, and required-script extraction failures stop the update rather than continuing with incomplete files ([`my`, lines 2540–2580](../../my#L2540)).
+- Signature or checksum verification has not been implemented; this remains a separate supply-chain hardening opportunity.
 
 ## Design and trust-boundary note
 
@@ -76,4 +83,4 @@ A longer-term design could parse command definitions into command/argument struc
 1. Prevent runtime arguments and nested invocation arguments from becoming executable shell syntax.
 2. Remove `eval` from include-path expansion.
 3. Ensure privileged update execution cannot source user-controlled startup files.
-4. Move update downloads and extraction into a private temporary directory, then validate the archive contents and integrity.
+4. Use a private update workspace and validate archive contents. **Implemented.** Trusted signature or checksum verification remains open.

@@ -13,16 +13,27 @@ fi
 # Save original IFS at script start
 __MYCE_ORIGINAL_IFS="$IFS"
 
+# Keep downloaded update files private and remove them when the script exits.
+__MYCE_UPDATE_TMP_DIR=""
+function cleanup_update_temp_dir() {
+    if [[ -n "$__MYCE_UPDATE_TMP_DIR" ]]; then
+        if ! rm -rf -- "$__MYCE_UPDATE_TMP_DIR"; then
+            printf 'Failed to remove update temp directory: %s\n' "$__MYCE_UPDATE_TMP_DIR" >&2
+        fi
+        __MYCE_UPDATE_TMP_DIR=""
+    fi
+}
+
 # Trap to restore IFS on exit, error, or interrupt
-trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
+trap 'cleanup_update_temp_dir; IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.10.21
+__Version=26.10.22
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
-__origArgs=$* # Capture all of the original arguments
+__origArgs=("$@") # Capture all of the original arguments
 
 # Detect the shell if possible. Prefer shell environment markers over the parent process,
 # because `sudo`/root re-executes the script in a different process tree.
@@ -1063,6 +1074,13 @@ function runCMD() {
     fi
 
     return $exit_code
+}
+
+# Run an argv list through runCMD without losing argument boundaries to eval.
+function runCMD_argv() {
+    local command_string
+    printf -v command_string '%q ' "$@"
+    runCMD "$command_string"
 }
 
 # Function to add or update a key-value pair in an INI file
@@ -2462,57 +2480,107 @@ function find_and_run_cmd() {
     fi
 }
 
-# Download and extract the latest releast from github to a temp folder
+# Download the requested release archive and stage only the files used by the updater.
 function download_latest_release() {
     local temp_file="$1"
-    local repo="$2"
-    local tag="${3:latest}"
+    local extract_dir="$2"
+    local repo="$3"
+    local tag="${4:-latest}"
+    local github_path
+    local latest_url
+    local archive_entries
+    local archive_path
 
-    # Get the latest release files into a tmp location
+    # Resolve aliases such as "released" and "head" to their archive source.
     log 1 "Checking ${repo} for ${tag} release..."
 
-    case ${tag} in
+    case "${tag}" in
         latest|release|released )
-            tag="$(curl -Ls -o /dev/null -w '%{url_effective}' "${repo}/releases/latest" | awk -F'/' '{print $NF}')"
+            if ! latest_url="$(curl --fail --location --silent --show-error -o /dev/null -w '%{url_effective}' "${repo}/releases/latest")"; then
+                log 0 "Failed to resolve the latest release tag from ${repo}"
+                return 1
+            fi
+            tag="${latest_url##*/}"
             log 1 "Found Latest Release Tag: ${tag}"
-            local github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
-            archive_root="MyCE-${tag#v}"
             ;;
 
         head|main )
             log 1 "Using head of Main branch"
-            local github_path="${repo}/archive/refs/heads/main.tar.gz"
             tag=main
-            archive_root="MyCE-main"
+            github_path="${repo}/archive/refs/heads/main.tar.gz"
             ;;
 
-        # Assume the given value is a version number
+        # Treat any other value as an explicitly requested release tag.
         * )
             log 1 "Using Release Tag: ${tag}"
-            local github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
-            archive_root="MyCE-${tag#v}"
             ;;
     esac
 
+    # Restrict tags to safe URL and archive-name characters before using them.
+    if [[ ! "${tag}" =~ ^v?[[:alnum:]][[:alnum:]._-]*$ ]]; then
+        log 0 "Invalid release tag: ${tag}"
+        return 1
+    fi
 
-    # Download the latest version from the github repo
+    if [[ "${tag}" != "main" ]]; then
+        github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
+    fi
+    archive_root="MyCE-${tag#v}"
+
+    if [[ ! -d "${extract_dir}" || -L "${extract_dir}" ]]; then
+        log 0 "Update temp directory is missing or invalid: ${extract_dir}"
+        return 1
+    fi
+
+    # Download the GitHub source archive to the private update directory.
     log 0 "\nDownloading latest version from GitHub..."
     log 0 "    ${github_path}\n"
 
-
-    # Example: https://github.com/jerrens/MyCE/archive/refs/tags/v26.2.6.tar.gz`
     log 2 "Storing temp file at: ${temp_file}"
     if ! wget --output-document "${temp_file}" --quiet "${github_path}"; then
         log 0 "Failed to download the latest version from ${github_path}"
-        exit 1
+        return 1
     fi
 
-    # Extract the downloaded archive.
-    # Older releases used bash-completion/, newer ones use auto-complete/.
-    tar -xzf "${temp_file}" --directory /tmp \
-        --wildcards "${archive_root}/my" \
-        --wildcards "${archive_root}/auto-complete/*" \
-        --wildcards "${archive_root}/bash-completion/*" 2>/dev/null || true
+    # Inspect the archive first; never unpack its paths directly into a shared directory.
+    if ! archive_entries="$(tar -tzf "${temp_file}")"; then
+        log 0 "Failed to read the downloaded update archive"
+        return 1
+    fi
+
+    if ! grep -Fxq -- "${archive_root}/my" <<< "${archive_entries}"; then
+        log 0 "The downloaded update archive does not contain ${archive_root}/my"
+        return 1
+    fi
+
+    # Extract only the update script and known shell-completion files.
+    if ! mkdir -p -- "${extract_dir}/auto-complete"; then
+        log 0 "Failed to prepare the update temp directory"
+        return 1
+    fi
+
+    if ! tar -xOzf "${temp_file}" -- "${archive_root}/my" > "${extract_dir}/my" ||
+        [[ ! -s "${extract_dir}/my" || -L "${extract_dir}/my" ]]; then
+        log 0 "Failed to extract the MyCE script from the update archive"
+        return 1
+    fi
+
+    for archive_path in auto-complete/_my.zsh auto-complete/my.bash; do
+        if grep -Fxq -- "${archive_root}/${archive_path}" <<< "${archive_entries}"; then
+            if ! tar -xOzf "${temp_file}" -- "${archive_root}/${archive_path}" > "${extract_dir}/${archive_path}" ||
+                [[ ! -s "${extract_dir}/${archive_path}" || -L "${extract_dir}/${archive_path}" ]]; then
+                log 0 "Failed to extract ${archive_path} from the update archive"
+                return 1
+            fi
+        fi
+    done
+
+    if [[ ! -f "${extract_dir}/my" || -L "${extract_dir}/my" ]]; then
+        log 0 "The downloaded update script is missing or invalid"
+        return 1
+    fi
+
+    return 0
 }
 
 
@@ -2530,13 +2598,13 @@ function configure_completion_for_shell() {
 
             if [[ -f "${zsh_rc}" ]]; then
                 if ! grep -q 'autoload -Uz compinit' "${zsh_rc}" 2>/dev/null; then
-                    runCMD sh -c "printf '\nautoload -Uz compinit\ncompinit\n' >> \"${zsh_rc}\""
+                    runCMD_argv sh -c 'printf "\nautoload -Uz compinit\ncompinit\n" >> "$1"' _ "${zsh_rc}"
                 fi
                 if ! grep -q "${zsh_site_dir}" "${zsh_rc}" 2>/dev/null; then
-                    runCMD sh -c "printf '\nfpath=(%s \\$fpath)\n' \"${zsh_site_dir}\" >> \"${zsh_rc}\""
+                    runCMD_argv sh -c 'printf "\nfpath=(%s \$fpath)\n" "$1" >> "$2"' _ "${zsh_site_dir}" "${zsh_rc}"
                 fi
             else
-                runCMD sh -c "printf 'autoload -Uz compinit\\ncompinit\\nfpath=(%s \\$fpath)\\n' \"${zsh_site_dir}\" > \"${zsh_rc}\""
+                runCMD_argv sh -c 'printf "autoload -Uz compinit\ncompinit\nfpath=(%s \$fpath)\n" "$1" > "$2"' _ "${zsh_site_dir}" "${zsh_rc}"
             fi
 
             log 0 "ZSH completion enabled. Start a new zsh session or run 'exec zsh'."
@@ -2550,10 +2618,10 @@ function configure_completion_for_shell() {
 
             if [[ -f "${bash_rc}" ]]; then
                 if ! grep -q '/etc/bash_completion' "${bash_rc}" 2>/dev/null; then
-                    runCMD sh -c "printf '\nif [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\n' >> \"${bash_rc}\""
+                    runCMD_argv sh -c 'printf "\nif [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\n" >> "$1"' _ "${bash_rc}"
                 fi
             else
-                runCMD sh -c "printf 'if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\\n' > \"${bash_rc}\""
+                runCMD_argv sh -c 'printf "if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\n" > "$1"' _ "${bash_rc}"
             fi
 
             log 0 "Bash completion enabled. Start a new bash session or run 'exec bash'."
@@ -2657,7 +2725,7 @@ function update_script() {
     install_path=${install_path:-$0}
 
     local repo=https://github.com/jerrens/MyCE
-    local temp_file="/tmp/${__AppName}.${tag}.tar.gz"
+    local temp_file
 
 
     # Check for internet access
@@ -2669,10 +2737,21 @@ function update_script() {
     # If 'diff' is requested, then download and show the diff
     if [[ -n "$show_diff" ]]; then
         log 2 "User requested to view diff"
-        # Download and extract the latest released files
-        download_latest_release "${temp_file}" "${repo}" "${tag}"
+        # Keep the archive and staged script in a private directory until the exit trap removes it.
+        __MYCE_UPDATE_TMP_DIR="$(mktemp -d /tmp/myce-update.XXXXXXXX)" || {
+            log 0 "Failed to create a private update temp directory"
+            exit 1
+        }
+        chmod 700 "${__MYCE_UPDATE_TMP_DIR}" || {
+            log 0 "Failed to secure the update temp directory"
+            exit 1
+        }
+        temp_file="${__MYCE_UPDATE_TMP_DIR}/update.tar.gz"
+        if ! download_latest_release "${temp_file}" "${__MYCE_UPDATE_TMP_DIR}" "${repo}" "${tag}"; then
+            exit 1
+        fi
 
-        my_file_path="/tmp/${archive_root}/my"
+        my_file_path="${__MYCE_UPDATE_TMP_DIR}/my"
 
         if ! diff -q "${my_file_path}" "${install_path}" >/dev/null; then
             # Show the diff
@@ -2686,50 +2765,67 @@ function update_script() {
         fi
         log 0
 
-        # Remove the temp file
-        rm "${temp_file}"
-        rm -R "/tmp/${archive_root}"
         exit 0
     fi
 
     if [ "$EUID" -ne 0 ]; then
         log 0 "This should be run as root.  Attempting to elevate permissions..."
-        log 1 "runCMD XXdo $0 $__origArgs"
+        log 1 "runCMD XXdo $0 ${__origArgs[*]}"
 
         # Re-run this command as sudo while preserving the active shell environment.
+        local -a escalation_args=(env
+            "SHELL=${SHELL:-}"
+            "ZSH_VERSION=${ZSH_VERSION:-}"
+            "BASH_VERSION=${BASH_VERSION:-}")
+        local escalation_command
         if [[ $(type -t dzdo) == "file" ]]; then
             log 2 "Using dzdo for privilege escalation"
-            runCMD env SHELL="${SHELL:-}" ZSH_VERSION="${ZSH_VERSION:-}" BASH_VERSION="${BASH_VERSION:-}" dzdo "$0" "$__origArgs"
+            escalation_args+=(dzdo "$0" "${__origArgs[@]}")
         else
             log 2 "Using sudo for privilege escalation"
-            runCMD env SHELL="${SHELL:-}" ZSH_VERSION="${ZSH_VERSION:-}" BASH_VERSION="${BASH_VERSION:-}" sudo -E "$0" "$__origArgs"
+            escalation_args+=(sudo -E "$0" "${__origArgs[@]}")
         fi
+        # runCMD evaluates a shell command string, so quote each argument before joining it.
+        printf -v escalation_command '%q ' "${escalation_args[@]}"
+        runCMD "$escalation_command"
         exit
     fi
     # NOTE: Root Level if here
 
     log 1 "Downloading and installing MyCE from GitHub..."
+    # Create a private workspace for the archive and extracted update files.
+    __MYCE_UPDATE_TMP_DIR="$(mktemp -d /tmp/myce-update.XXXXXXXX)" || {
+        log 0 "Failed to create a private update temp directory"
+        exit 1
+    }
+    chmod 700 "${__MYCE_UPDATE_TMP_DIR}" || {
+        log 0 "Failed to secure the update temp directory"
+        exit 1
+    }
+    temp_file="${__MYCE_UPDATE_TMP_DIR}/update.tar.gz"
     log 2 "Temp file will be stored at: ${temp_file}"
     log 2 "Repo: ${repo}"
     log 2 "Tag: ${tag}"
-    download_latest_release "${temp_file}" "${repo}" "${tag}"
+    if ! download_latest_release "${temp_file}" "${__MYCE_UPDATE_TMP_DIR}" "${repo}" "${tag}"; then
+        exit 1
+    fi
 
     log 0 "Updating from v${__Version} to ${tag}..."
 
     # Move 'my' and make it executable
     log 1 "Installing to ${install_path}..."
-    runCMD mv -f "/tmp/${archive_root}/my" "${install_path}"
+    runCMD mv -f "${__MYCE_UPDATE_TMP_DIR}/my" "${install_path}"
     log 1 "\nModifying permissions..."
     runCMD chmod a+x "${install_path}"
 
     # Determine installation auto-completion based on shell type
     local src_file dest_file completion_dir
     if [[ $__Shell == "zsh" ]]; then
-        src_file="/tmp/${archive_root}/auto-complete/_my.zsh"
+        src_file="${__MYCE_UPDATE_TMP_DIR}/auto-complete/_my.zsh"
         dest_file="/usr/local/share/zsh/site-functions/_my"
         completion_dir="/usr/local/share/zsh/site-functions"
     else # Assume BASH
-        src_file="/tmp/${archive_root}/auto-complete/my.bash"
+        src_file="${__MYCE_UPDATE_TMP_DIR}/auto-complete/my.bash"
         dest_file="/etc/bash_completion.d/my.bash_completion"
         completion_dir="/etc/bash_completion.d"
     fi
@@ -2747,9 +2843,6 @@ function update_script() {
     fi
 
     log 0 "Update finished!"
-    log 2 "Removing temp file"
-    rm "${temp_file}"
-    rm -R "/tmp/${archive_root}"
     exit 0
 }
 
