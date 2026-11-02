@@ -1003,6 +1003,18 @@ if [[ "${!#}" == "@" ]]; then
 fi
 
 
+# When running as root, only source a run commands file that cannot be altered by other users.
+function __runcom_is_trusted() {
+    local file="$1"
+    [[ "$EUID" -ne 0 ]] && return 0
+    [[ -L "$file" ]] && return 1
+
+    local owner mode
+    read -r owner mode < <(stat -c '%u %a' "$file" 2>/dev/null || stat -f '%u %Lp' "$file" 2>/dev/null)
+    [[ "$owner" == "0" && "$mode" =~ ^[0-7]+$ ]] || return 1
+    (( (8#$mode & 8#022) == 0 ))
+}
+
 # Either runs the command or prints the command that would be executed if DRYRUN is 'true'
 #  Command and arguments are passed as parameters
 function runCMD() {
@@ -1052,7 +1064,9 @@ function runCMD() {
     log 3 "Executing: $cmd_string $*"
 
     # Before executing the command, run the shell rc file to support aliases and other configurations
-    if [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ]; then
+    if [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ] && ! __runcom_is_trusted "${MYCE_RUNCOM}"; then
+        log 0 "WARNING: Not sourcing '${MYCE_RUNCOM}' as root because it is not root-owned or is writable by others."
+    elif [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ]; then
         log 1 "MYCE_RUNCOM: Sourcing shell's run commands file - '${MYCE_RUNCOM}'..."
         # shellcheck source=/dev/null
         . "${MYCE_RUNCOM}" 2>/dev/null
@@ -2946,18 +2960,24 @@ function update_script() {
         log 0 "This should be run as root.  Attempting to elevate permissions..."
         log 1 "runCMD XXdo $0 ${__origArgs[*]}"
 
-        # Re-run this command as sudo while preserving the active shell environment.
-        local -a escalation_args=(env
+        # Re-run as root with an explicit environment instead of `sudo -E`. `env` runs after
+        # elevation, so these values apply regardless of sudo policy. HOME is only used as the
+        # destination for the user's shell files; the run commands file is never sourced as root.
+        local -a escalation_env=(env
+            "HOME=${HOME:-}"
             "SHELL=${SHELL:-}"
             "ZSH_VERSION=${ZSH_VERSION:-}"
-            "BASH_VERSION=${BASH_VERSION:-}")
+            "BASH_VERSION=${BASH_VERSION:-}"
+            "MYCE_RUNCOM=false")
+        [[ -n "${MYCE_NO_ANSI:-}" ]] && escalation_env+=("MYCE_NO_ANSI=${MYCE_NO_ANSI}")
+        local -a escalation_args
         local escalation_command
         if [[ $(type -t dzdo) == "file" ]]; then
             log 2 "Using dzdo for privilege escalation"
-            escalation_args+=(dzdo "$0" "${__origArgs[@]}")
+            escalation_args=(dzdo "${escalation_env[@]}" "$0" "${__origArgs[@]}")
         else
             log 2 "Using sudo for privilege escalation"
-            escalation_args+=(sudo -E "$0" "${__origArgs[@]}")
+            escalation_args=(sudo "${escalation_env[@]}" "$0" "${__origArgs[@]}")
         fi
         # runCMD evaluates a shell command string, so quote each argument before joining it.
         printf -v escalation_command '%q ' "${escalation_args[@]}"
