@@ -95,6 +95,10 @@ subdef1=echo ${1:-def}
 subdef2=echo "${1:-def}"
 subdef3=echo "${1:-def} ${2:-ALT}"
 subdef4=echo "${2:-def} ${1:-ALT}"
+inertQuoted=printf '<%s>\n' "$1"
+inertAll=printf '<%s>\n' "$@"
+inertNamed=printf '<%s>\n' "$value"
+inertDefault=printf '<%s>\n' "${1:-fallback}"
 
 # description: Test variable substitution with CONST
 var1=echo ${CONST}

@@ -1,5 +1,9 @@
 # Change History
 
+## 26.11.2
+
+* **Security: Runtime Arguments Are Not Reparsed as Shell Code** - Positional and named argument values are expanded as data, preventing shell syntax supplied at invocation time from becoming executable while retaining shell syntax in trusted command definitions.
+
 ## 26.10.21
 
 * **Enhancement: Long-Form Options and Help Handling** - Added `--list`, `--all`, `--descriptions`, `--values`, and `--values-expanded` as long-form alternatives for `list` options, plus `--help`

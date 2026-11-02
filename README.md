@@ -194,6 +194,8 @@ Commands support multiple ways to reference arguments:
 - `$*` - Expands to all arguments as a single unquoted string
 - `$@+`, `$*+` - Expands to remaining (non-referenced) arguments only—useful when you reference specific positions but want to pass unconsumed args through
 
+Runtime arguments are treated as data when expanded into a command definition: shell syntax inside an argument, such as `$(...)` or `;`, is not executed. Command definitions themselves remain shell code, so only use `.myCommands` files you trust.
+
 ##### Basic Positional Arguments
 
 Example:

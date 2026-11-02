@@ -28,7 +28,7 @@ function cleanup_update_temp_dir() {
 trap 'cleanup_update_temp_dir; IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.10.22
+__Version=26.11.2
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -657,6 +657,32 @@ function __replace_named_default_expressions() {
     __template_named_default_replaced=$replaced
 }
 
+# Runtime argument values are kept out of the command text. The template receives
+# variable references instead, so eval expands arguments as data without reparsing them.
+declare -ga __myce_value_keys=()
+declare -g __template_ref=""
+function __template_value_ref() {
+    local key="$1"
+    local value="$2"
+    printf -v "__MYCE_V_${key}" '%s' "$value"
+    __myce_value_keys+=("$key")
+    __template_ref="\${__MYCE_V_${key}}"
+}
+
+# Expands argument references for display only; execution uses the references as-is.
+declare -g __template_rendered_cmd=""
+function __render_value_refs() {
+    local text="$1"
+    local key var ref value
+    for key in "${__myce_value_keys[@]}"; do
+        var="__MYCE_V_${key}"
+        ref="\${${var}}"
+        value="${!var}"
+        text="${text//"$ref"/$value}"
+    done
+    __template_rendered_cmd="$text"
+}
+
 # Applies positional and named arguments to a template.
 # Args:
 #   $1: template string
@@ -672,6 +698,8 @@ function __apply_args_to_template() {
     declare -A named_param_delimiters
     declare -A referenced_names
     local out="$template"
+    local safe_values=false
+    [[ "$append_through" == "false" ]] && safe_values=true
     local max_arg_num=-1
     declare -A referenced_positions
 
@@ -711,7 +739,12 @@ function __apply_args_to_template() {
             if (( i > max_arg_num )); then
                 max_arg_num=$i
             fi
-            out="${out//${BASH_REMATCH[2]}/$p_arg}"
+            local p_sub="$p_arg"
+            if [[ "$safe_values" == true ]]; then
+                __template_value_ref "P${i}" "$p_arg"
+                p_sub="$__template_ref"
+            fi
+            out="${out//${BASH_REMATCH[2]}/$p_sub}"
         fi
     done
 
@@ -725,6 +758,10 @@ function __apply_args_to_template() {
             fi
         done
         remaining_args_str="${remaining_args_str% }"
+        if [[ "$safe_values" == true ]]; then
+            __template_value_ref "REST" "$remaining_args_str"
+            remaining_args_str="$__template_ref"
+        fi
 
         out="${out//\$@+/$remaining_args_str}"
         out="${out//\$\*+/$remaining_args_str}"
@@ -740,6 +777,10 @@ function __apply_args_to_template() {
         if [[ ${#args[@]} -gt 0 ]]; then
             printf -v all_args_str '%s ' "${args[@]}"
             all_args_str="${all_args_str% }"
+        fi
+        if [[ "$safe_values" == true ]]; then
+            __template_value_ref "ALL" "$all_args_str"
+            all_args_str="$__template_ref"
         fi
 
         out="${out//\$\{@\}/$all_args_str}"
@@ -764,6 +805,10 @@ function __apply_args_to_template() {
     local param_name
     for param_name in "${!named_params[@]}"; do
         local param_value="${named_params[$param_name]}"
+        if [[ "$safe_values" == true ]]; then
+            __template_value_ref "N_${param_name}" "$param_value"
+            param_value="$__template_ref"
+        fi
         local escaped_value
         escaped_value=$(printf '%s\n' "$param_value" | sed 's/[\/&]/\\&/g')
 
@@ -982,7 +1027,8 @@ function runCMD() {
         fi
 
         # Build the dry-run command string and escape special control characters
-        local dry_cmd_value="$cmd_string"
+        __render_value_refs "$cmd_string"
+        local dry_cmd_value="$__template_rendered_cmd"
         # Append remaining arguments if any
         if [[ $# -gt 0 ]]; then
             dry_cmd_value="$dry_cmd_value $*"
@@ -1032,7 +1078,7 @@ function runCMD() {
     done
 
     # Skip pre-validation for words containing command substitutions — bash resolves them at execution time
-    if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]] && \
+    if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]] && [[ "$__cmd_word" != *'${__MYCE_V_'* ]] && \
        [[ "$__cmd_word" != *'$('* ]] && [[ "$__cmd_word" != *'`'* ]]; then
         # For paths (containing / or ~), check if file exists and is executable
         # For other commands, use 'type' to find them in PATH or as shell functions
@@ -2388,6 +2434,7 @@ function find_and_run_cmd() {
         binary_cmd="$__nested_expanded_cmd"
 
         # Replace positional/named references via shared helper.
+        __myce_value_keys=()
         __apply_args_to_template "$binary_cmd" "false" "$@"
         binary_cmd="$__template_expanded_cmd"
 
