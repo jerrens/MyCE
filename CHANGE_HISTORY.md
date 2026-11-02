@@ -2,6 +2,7 @@
 
 ## 26.11.2
 
+* **Security: Safe Include Path Expansion** - Include paths now support literal paths, leading `~`, and simple environment-variable references without shell evaluation; unsupported shell syntax is rejected, and recursive include cycles are skipped.
 * **Security: Runtime Arguments Are Not Reparsed as Shell Code** - Positional and named argument values are expanded as data, preventing shell syntax supplied at invocation time from becoming executable while retaining shell syntax in trusted command definitions.
 
 ## 26.10.21

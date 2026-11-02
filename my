@@ -1332,6 +1332,10 @@ declare -a conditionalBlockOrder
 declare -a conditional_stack_ids
 declare -a conditional_stack_defs
 
+declare -a __active_include_files
+declare -g __expanded_include_path=""
+declare -g __canonical_include_path=""
+
 function trim() {
     local var="$1"
     var="${var#"${var%%[![:space:]]*}"}"
@@ -1339,14 +1343,134 @@ function trim() {
     printf '%s' "$var"
 }
 
+function __expand_include_path() {
+    local path
+    path="$(trim "$1")"
+    __expanded_include_path=""
+
+    if [[ ${#path} -ge 2 && "$path" == \"*\" ]]; then
+        path="${path:1:${#path}-2}"
+    elif [[ ${#path} -ge 2 && "$path" == \'*\' ]]; then
+        path="${path:1:${#path}-2}"
+    fi
+
+    if [[ -z "$path" || "$path" == *\"* || "$path" == *\'* ||
+          "$path" == *'$('* || "$path" == *'`'* || "$path" == *';'* ||
+          "$path" == *'|'* || "$path" == *'&'* || "$path" == *'<'* ||
+          "$path" == *'>'* || "$path" == *'('* || "$path" == *')'* ||
+          "$path" == *'\\'* || "$path" == *'*'* || "$path" == *'?'* ||
+          "$path" == *'['* || "$path" == *']'* ]]; then
+        return 1
+    fi
+
+    if [[ "$path" == "~" ]]; then
+        path="$HOME"
+    elif [[ "$path" == "~/"* ]]; then
+        path="$HOME/${path:2}"
+    elif [[ "$path" == "~"* ]]; then
+        return 1
+    fi
+
+    local expanded=""
+    local i=0
+    local name value
+    while (( i < ${#path} )); do
+        if [[ "${path:i:1}" != '$' ]]; then
+            expanded+="${path:i:1}"
+            ((i++))
+            continue
+        fi
+
+        ((i++))
+        if [[ "${path:i:1}" == '{' ]]; then
+            ((i++))
+            local start=$i
+            while (( i < ${#path} )) && [[ "${path:i:1}" =~ [a-zA-Z0-9_] ]]; do
+                ((i++))
+            done
+            name="${path:start:i-start}"
+            if [[ ! "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] ||
+               [[ "${path:i:1}" != '}' ]]; then
+                return 1
+            fi
+            ((i++))
+        else
+            if [[ ! "${path:i:1}" =~ [a-zA-Z_] ]]; then
+                return 1
+            fi
+            local start=$i
+            while (( i < ${#path} )) && [[ "${path:i:1}" =~ [a-zA-Z0-9_] ]]; do
+                ((i++))
+            done
+            name="${path:start:i-start}"
+        fi
+
+        value="${!name}"
+        expanded+="$value"
+    done
+
+    __expanded_include_path="$expanded"
+    [[ -n "$expanded" ]]
+}
+
+function __canonicalize_include_path() {
+    local path="$1"
+    local directory target
+    local link_count=0
+
+    [[ "$path" == /* ]] || path="$PWD/$path"
+    directory="$(cd -P -- "$(dirname -- "$path")" 2>/dev/null && pwd -P)" || return 1
+    path="$directory/${path##*/}"
+
+    while [[ -L "$path" ]]; do
+        ((link_count++))
+        if (( link_count > 40 )); then
+            return 1
+        fi
+        target="$(readlink "$path")" || return 1
+        if [[ "$target" == /* ]]; then
+            path="$target"
+        else
+            path="$(dirname -- "$path")/$target"
+        fi
+        directory="$(cd -P -- "$(dirname -- "$path")" 2>/dev/null && pwd -P)" || return 1
+        path="$directory/${path##*/}"
+    done
+
+    [[ -f "$path" ]] || return 1
+    __canonical_include_path="$path"
+}
+
+function __leave_include_file() {
+    local count=${#__active_include_files[@]}
+    if (( count > 0 )); then
+        __active_include_files=("${__active_include_files[@]:0:$((count - 1))}")
+    fi
+}
+
 function process_ini_file() {
     log 1 "Loading file: $1"
     local filepath="$1"
+    local active_identity
+    if ! __canonicalize_include_path "$filepath"; then
+        log 0 "  WARNING: Unable to resolve included file '$filepath'!"
+        return 1
+    fi
+    active_identity="$__canonical_include_path"
+    local active_file
+    for active_file in "${__active_include_files[@]}"; do
+        if [[ "$active_file" == "$active_identity" ]]; then
+            log 0 "  WARNING: Include cycle detected for '$filepath'; skipping it."
+            return 1
+        fi
+    done
+    __active_include_files+=("$active_identity")
     local in_myce_section=false
 
     # Detect the line break character for this file (LF vs CRLF) and warn the user if it is not LF
     if grep -q $'\r' "$1"; then
         log 0 "\e[1;31mWARNING: Detected CRLF line endings in file '$1'.\nThis will cause issues when parsing and will be skipped.  Please convert the file to LF line breaks.\n\e[0m"
+        __leave_include_file
         return 1
     fi
 
@@ -1478,15 +1602,17 @@ function process_ini_file() {
 
         # Check for include statements
         if [[ "$line" =~ ^include[[:space:]]+(.+)$ ]]; then
-            include_file="${BASH_REMATCH[1]}"
-            log 2 "Include Statement detected: Including file - '$include_file'"
-
-            # Path may include tilde
-            include_file=$(eval echo "$include_file")
+            local include_spec="${BASH_REMATCH[1]}"
+            log 2 "Include Statement detected: Including file - '$include_spec'"
+            if ! __expand_include_path "$include_spec"; then
+                log 0 "  WARNING: Unsupported include path '$include_spec'; use a literal path, ~, or simple environment variables."
+                continue
+            fi
+            local include_file="$__expanded_include_path"
 
             # Resolve relative paths based on the current file's directory
             if [[ ! "$include_file" = /* ]]; then
-                include_file="$(dirname "$1")/$include_file"
+                include_file="$(dirname "$filepath")/$include_file"
             fi
 
             if [[ -f "$include_file" ]]; then
@@ -1718,6 +1844,7 @@ function process_ini_file() {
     # done < "$1"
     done 3< <(cat "$1")
     log 2 "" # Add some spacing in extra verbose mode
+    __leave_include_file
 }
 
 # Walks the directory tree from the current directory to root and combines all
