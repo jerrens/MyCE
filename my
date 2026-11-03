@@ -2272,6 +2272,11 @@ function __evaluate_condition() {
     # Trim whitespace
     condition="$(trim "$condition")"
 
+    # Allow a quoted variable on the left side: "$VAR" == "value"
+    if [[ "$condition" =~ ^\"\$([a-zA-Z_][a-zA-Z0-9_]*)\"([[:space:]].*)$ ]]; then
+        condition="\$${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+    fi
+
     # Check for existence (negative) - [IF !$VAR]
     if [[ "$condition" =~ ^![[:space:]]*\$([a-zA-Z_][a-zA-Z0-9_]*)$ ]]; then
         local var_name="${BASH_REMATCH[1]}"
