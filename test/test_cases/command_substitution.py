@@ -29,6 +29,12 @@ test_cases = {
         "description": "NESTED: missing nested key is preserved for shell expansion"
     },
 
+    "alias.refChain": {
+        "cmd": "alias.refChain",
+        "see": "^echo web1 tool install$",
+        "description": "NESTED: args after references and self-referencing defaults still resolve later variables"
+    },
+
     "alias.nestedLoopA": {
         "cmd": "alias.nestedLoopA",
         "see": "Nested invocation depth exceeded",

@@ -1,6 +1,53 @@
 # Test cases for conditional variable definitions [IF]/[ELSE IF]/[ELSE]/[FI]
 
 test_cases = {
+    "default expression uses config fallback": {
+        "cmd": "echo.result",
+        "pwd": "projectConditionals/defaultExpression",
+        "pre": "env -u MYCE_CONDITION_ENGINE",
+        "see": "^podman-selected$",
+        "description": "Condition resolution expands nested defaults and config-defined fallback values"
+    },
+
+    "default expression uses environment value": {
+        "cmd": "echo.result",
+        "pwd": "projectConditionals/defaultExpression",
+        "pre": "MYCE_CONDITION_ENGINE=docker",
+        "see": "^docker-selected$",
+        "description": "A self-referencing Bash-style default uses the environment value when set"
+    },
+
+    "default operator distinguishes empty values": {
+        "cmd": "echo.empty-minus",
+        "pwd": "projectConditionals/defaultExpression",
+        "pre": "MYCE_EMPTY_VAR=",
+        "see": "^empty$",
+        "description": "The Bash-style - operator preserves an explicitly empty environment value"
+    },
+
+    "colon default operator falls back for empty values": {
+        "cmd": "echo.empty-colon",
+        "pwd": "projectConditionals/defaultExpression",
+        "pre": "MYCE_EMPTY_VAR=",
+        "see": "^defaulted$",
+        "description": "The Bash-style :- operator uses its fallback for an empty environment value"
+    },
+
+    "user override is final conditional value": {
+        "cmd": "echo.result",
+        "pwd": "projectConditionals/userOverride",
+        "pre": "MYCE_CONDITION_ENGINE=podman",
+        "see": "^docker-selected$",
+        "description": "A .myCommands.user override takes precedence over the base default and environment"
+    },
+
+    "recursive config value does not loop": {
+        "cmd": "echo.cycle",
+        "pwd": "projectConditionals/cycle",
+        "see": "cycle-safe$",
+        "description": "Recursive config references fail safely while evaluating a condition"
+    },
+
     # Test commands that use conditional variables
     # The conditionals define variables in the .myCommands file
     # and commands use those variables

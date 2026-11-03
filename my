@@ -28,7 +28,7 @@ function cleanup_update_temp_dir() {
 trap 'cleanup_update_temp_dir; IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.11.2
+__Version=26.11.3
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -1973,6 +1973,156 @@ function findKey() {
     return 1
 }
 
+# Resolve configuration references used by conditional expressions without
+# evaluating the value as shell code.
+declare -g __condition_value=""
+declare -g __condition_value_set=false
+declare -g __condition_value_error=""
+declare -Ag __condition_resolving=()
+
+function __resolve_condition_variable() {
+    local name="$1"
+    local configured_value
+    __condition_value=""
+    __condition_value_set=false
+
+    if [[ -v __condition_resolving["$name"] ]]; then
+        if [[ -v "$name" ]]; then
+            __condition_value="${!name}"
+            __condition_value_set=true
+            return 0
+        fi
+        return 2
+    fi
+
+    if findKey "$name"; then
+        configured_value="$foundKey_value"
+        __condition_resolving["$name"]=1
+        __expand_condition_value "$configured_value"
+        local result=$?
+        unset "__condition_resolving[$name]"
+        return "$result"
+    fi
+
+    if [[ -v "$name" ]]; then
+        __condition_value="${!name}"
+        __condition_value_set=true
+    fi
+    return 0
+}
+
+function __resolve_condition_reference() {
+    local name="$1"
+    local operator="$2"
+    local default_value="$3"
+
+    __resolve_condition_variable "$name"
+    local result=$?
+    if (( result != 0 )); then
+        if [[ -n "$operator" ]]; then
+            if [[ "$operator" == ":-" && "$__condition_value_set" == true && -n "$__condition_value" ]] ||
+               [[ "$operator" == "-" && "$__condition_value_set" == true ]]; then
+                return 0
+            fi
+            __expand_condition_value "$default_value"
+            return $?
+        fi
+
+        __condition_value_error="Recursive configuration reference involving '$name'"
+        return 1
+    fi
+
+    if [[ -n "$operator" ]]; then
+        if [[ "$operator" == ":-" && ( "$__condition_value_set" != true || -z "$__condition_value" ) ]] ||
+           [[ "$operator" == "-" && "$__condition_value_set" != true ]]; then
+            __expand_condition_value "$default_value"
+            return $?
+        fi
+    fi
+    return 0
+}
+
+function __expand_condition_value() {
+    local input="$1"
+    local output=""
+    local i=0
+    local len=${#input}
+
+    while (( i < len )); do
+        local char="${input:i:1}"
+        if [[ "$char" == '\\' && "${input:i+1:1}" == '$' ]]; then
+            output+='$'
+            ((i+=2))
+            continue
+        fi
+        if [[ "$char" != '$' ]]; then
+            output+="$char"
+            ((i++))
+            continue
+        fi
+
+        local name=""
+        local operator=""
+        local default_value=""
+        local token_len=0
+        if [[ "${input:i+1:1}" == '{' ]]; then
+            local j=$((i + 2))
+            local brace_depth=1
+            while (( j < len )); do
+                if [[ "${input:j:2}" == '${' ]]; then
+                    ((brace_depth++))
+                    ((j+=2))
+                    continue
+                fi
+                if [[ "${input:j:1}" == '}' ]]; then
+                    ((brace_depth--))
+                    if (( brace_depth == 0 )); then
+                        break
+                    fi
+                fi
+                ((j++))
+            done
+
+            if (( brace_depth != 0 )); then
+                __condition_value_error="Unclosed variable reference in conditional value"
+                return 1
+            fi
+
+            local expression="${input:i+2:j-i-2}"
+            if [[ "$expression" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)(:-|-)(.*)$ ]]; then
+                name="${BASH_REMATCH[1]}"
+                operator="${BASH_REMATCH[2]}"
+                default_value="${BASH_REMATCH[3]}"
+            elif [[ "$expression" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+                name="$expression"
+            else
+                __condition_value_error="Unsupported variable expression '\${$expression}' in conditional value"
+                return 1
+            fi
+            token_len=$((j - i + 1))
+        elif [[ "${input:i+1}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*) ]]; then
+            name="${BASH_REMATCH[1]}"
+            token_len=$((${#name} + 1))
+        else
+            output+='$'
+            ((i++))
+            continue
+        fi
+
+        __resolve_condition_reference "$name" "$operator" "$default_value"
+        local result=$?
+        if (( result != 0 )); then
+            return "$result"
+        fi
+        output+="$__condition_value"
+        i=$((i + token_len))
+    done
+
+    __condition_value="$output"
+    __condition_value_set=true
+    return 0
+}
+
 # Evaluates all conditional blocks that were parsed from .myCommands files
 # and merges matching conditional definitions into the commands array
 # Properly handles IF/ELSE IF/ELSE chains - once one matches, rest are skipped
@@ -2122,19 +2272,21 @@ function __evaluate_condition() {
     # Trim whitespace
     condition="$(trim "$condition")"
 
+    # Allow a quoted variable on the left side: "$VAR" == "value"
+    if [[ "$condition" =~ ^\"\$([a-zA-Z_][a-zA-Z0-9_]*)\"([[:space:]].*)$ ]]; then
+        condition="\$${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+    fi
+
     # Check for existence (negative) - [IF !$VAR]
     if [[ "$condition" =~ ^![[:space:]]*\$([a-zA-Z_][a-zA-Z0-9_]*)$ ]]; then
         local var_name="${BASH_REMATCH[1]}"
         log 3 "      Checking if variable is empty: $var_name"
 
-        if findKey "$var_name"; then
-            local var_value="$foundKey_value"
-            if [[ -z "$var_value" ]]; then
-                __condition_result="true"
-                return 0
-            fi
-        else
-            # Variable doesn't exist, so it's "empty"
+        __condition_value_error=""
+        __resolve_condition_variable "$var_name"
+        if [[ -n "$__condition_value_error" ]]; then
+            log 0 "WARNING: $__condition_value_error"
+        elif [[ "$__condition_value_set" != true || -z "$__condition_value" ]]; then
             __condition_result="true"
             return 0
         fi
@@ -2147,12 +2299,13 @@ function __evaluate_condition() {
         local var_name="${BASH_REMATCH[1]}"
         log 3 "      Checking if variable is non-empty: $var_name"
 
-        if findKey "$var_name"; then
-            local var_value="$foundKey_value"
-            if [[ -n "$var_value" ]]; then
-                __condition_result="true"
-                return 0
-            fi
+        __condition_value_error=""
+        __resolve_condition_variable "$var_name"
+        if [[ -n "$__condition_value_error" ]]; then
+            log 0 "WARNING: $__condition_value_error"
+        elif [[ "$__condition_value_set" == true && -n "$__condition_value" ]]; then
+            __condition_result="true"
+            return 0
         fi
         __condition_result="false"
         return 0
@@ -2164,12 +2317,13 @@ function __evaluate_condition() {
         local pattern="${BASH_REMATCH[3]}"
         log 3 "      Checking regex match: $var_name matches \"$pattern\""
 
-        if findKey "$var_name"; then
-            local var_value="$foundKey_value"
-            if [[ "$var_value" =~ $pattern ]]; then
-                __condition_result="true"
-                return 0
-            fi
+        __condition_value_error=""
+        __resolve_condition_variable "$var_name"
+        if [[ -n "$__condition_value_error" ]]; then
+            log 0 "WARNING: $__condition_value_error"
+        elif [[ "$__condition_value" =~ $pattern ]]; then
+            __condition_result="true"
+            return 0
         fi
         __condition_result="false"
         return 0
@@ -2181,12 +2335,13 @@ function __evaluate_condition() {
         local expected_value="${BASH_REMATCH[3]}"
         log 3 "      Checking equality: $var_name == \"$expected_value\""
 
-        if findKey "$var_name"; then
-            local var_value="$foundKey_value"
-            if [[ "$var_value" == "$expected_value" ]]; then
-                __condition_result="true"
-                return 0
-            fi
+        __condition_value_error=""
+        __resolve_condition_variable "$var_name"
+        if [[ -n "$__condition_value_error" ]]; then
+            log 0 "WARNING: $__condition_value_error"
+        elif [[ "$__condition_value" == "$expected_value" ]]; then
+            __condition_result="true"
+            return 0
         fi
         __condition_result="false"
         return 0
@@ -2198,14 +2353,15 @@ function __evaluate_condition() {
         local expected_value="${BASH_REMATCH[3]}"
         log 3 "      Checking inequality: $var_name != \"$expected_value\""
 
-        if findKey "$var_name"; then
-            local var_value="$foundKey_value"
-            if [[ "$var_value" != "$expected_value" ]]; then
-                __condition_result="true"
-                return 0
-            fi
-        else
+        __condition_value_error=""
+        __resolve_condition_variable "$var_name"
+        if [[ -n "$__condition_value_error" ]]; then
+            log 0 "WARNING: $__condition_value_error"
+        elif [[ "$__condition_value_set" != true ]]; then
             # Variable doesn't exist, so it's != to any value
+            __condition_result="true"
+            return 0
+        elif [[ "$__condition_value" != "$expected_value" ]]; then
             __condition_result="true"
             return 0
         fi
@@ -2617,6 +2773,11 @@ function find_and_run_cmd() {
                     log 2 "    Found key: $foundKey_value"
                     # Replace only the first occurrence after the prefix
                     binary_cmd="${binary_cmd/"$prefix$slug"/"$prefix$foundKey_value"}"
+                    # A self-referencing definition (e.g. VAR=${VAR:-default}) makes no progress;
+                    # escape it for the shell so the remaining references still get resolved.
+                    if [[ "$binary_cmd" == "$before" ]]; then
+                        binary_cmd="${binary_cmd/"$prefix$slug"/"${prefix}\\$slug"}"
+                    fi
                 else
                     log 1 "The referenced variable ($slug) was not defined! Passing through to eval"
                     # Replace only the first occurrence after the prefix with escaped $

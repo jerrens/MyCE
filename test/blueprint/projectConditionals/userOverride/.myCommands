@@ -1,0 +1,11 @@
+MYCE_CONDITION_ENGINE=${MYCE_CONDITION_ENGINE:-podman}
+
+[IF $MYCE_CONDITION_ENGINE == "podman"]
+    RESULT=podman-selected
+[ELSE IF $MYCE_CONDITION_ENGINE == "docker"]
+    RESULT=docker-selected
+[ELSE]
+    RESULT=unknown-selected
+[FI]
+
+echo.result=echo "$RESULT"
