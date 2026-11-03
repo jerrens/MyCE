@@ -1,5 +1,11 @@
 # Change History
 
+## 26.11.2
+
+* **Security: Privileged Update No Longer Sources User Startup Files** - `my update` elevates with an explicit environment (no `sudo -E`) and `MYCE_RUNCOM=false`. When MyCE runs as root, it sources the run commands file only if it is root-owned, not a symlink, and not group/world-writable.
+* **Security: Safe Include Path Expansion** - Include paths now support literal paths, leading `~`, and simple environment-variable references without shell evaluation; unsupported shell syntax is rejected, and recursive include cycles are skipped.
+* **Security: Runtime Arguments Are Not Reparsed as Shell Code** - Positional and named argument values are expanded as data, preventing shell syntax supplied at invocation time from becoming executable while retaining shell syntax in trusted command definitions.
+
 ## 26.10.21
 
 * **Enhancement: Long-Form Options and Help Handling** - Added `--list`, `--all`, `--descriptions`, `--values`, and `--values-expanded` as long-form alternatives for `list` options, plus `--help`

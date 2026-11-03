@@ -194,6 +194,8 @@ Commands support multiple ways to reference arguments:
 - `$*` - Expands to all arguments as a single unquoted string
 - `$@+`, `$*+` - Expands to remaining (non-referenced) arguments only—useful when you reference specific positions but want to pass unconsumed args through
 
+Runtime arguments are treated as data when expanded into a command definition: shell syntax inside an argument, such as `$(...)` or `;`, is not executed. Command definitions themselves remain shell code, so only use `.myCommands` files you trust.
+
 ##### Basic Positional Arguments
 
 Example:
@@ -909,9 +911,10 @@ CONTAINER_EXE=docker
 
 ### Include Files
 
-Other files may be included by adding a `include <FILE>` line in a `.myCommands` file.
+Other files may be included by adding a `include <FILE>` line in a `.myCommands` file. The included file can have any name, but its contents must use MyCE configuration syntax.
 The key-values defined in the referenced file will be processed as soon as the line is detected.
 This means that any definitions in the included file will overwrite any previously defined values and will be overwritten by any values processed later.
+Include paths are resolved relative to the file containing the directive unless they are absolute. Paths support a leading `~` and simple environment references such as `$HOME` and `${WORKSPACE}`; paths containing spaces are treated as a single path. Command substitutions, backticks, shell operators, and glob patterns are rejected rather than evaluated. Repeated includes are allowed, but recursive include cycles are skipped with a warning.
 
 This feature is beneficial if you want to keep credentials and secrets in a separate file that is excluded from repositories, but you want the `.myCommands` file to be part of the version history for sharing with other developers.
 

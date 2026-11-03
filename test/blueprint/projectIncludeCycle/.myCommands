@@ -1,0 +1,3 @@
+include ./cycle.conf
+[include]
+aftercycle=echo cycle handled

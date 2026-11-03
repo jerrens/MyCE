@@ -13,16 +13,27 @@ fi
 # Save original IFS at script start
 __MYCE_ORIGINAL_IFS="$IFS"
 
+# Keep downloaded update files private and remove them when the script exits.
+__MYCE_UPDATE_TMP_DIR=""
+function cleanup_update_temp_dir() {
+    if [[ -n "$__MYCE_UPDATE_TMP_DIR" ]]; then
+        if ! rm -rf -- "$__MYCE_UPDATE_TMP_DIR"; then
+            printf 'Failed to remove update temp directory: %s\n' "$__MYCE_UPDATE_TMP_DIR" >&2
+        fi
+        __MYCE_UPDATE_TMP_DIR=""
+    fi
+}
+
 # Trap to restore IFS on exit, error, or interrupt
-trap 'IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
+trap 'cleanup_update_temp_dir; IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.10.21
+__Version=26.11.2
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
 __AppName=${__ScriptName%.*} # File name without extension
-__origArgs=$* # Capture all of the original arguments
+__origArgs=("$@") # Capture all of the original arguments
 
 # Detect the shell if possible. Prefer shell environment markers over the parent process,
 # because `sudo`/root re-executes the script in a different process tree.
@@ -646,6 +657,32 @@ function __replace_named_default_expressions() {
     __template_named_default_replaced=$replaced
 }
 
+# Runtime argument values are kept out of the command text. The template receives
+# variable references instead, so eval expands arguments as data without reparsing them.
+declare -ga __myce_value_keys=()
+declare -g __template_ref=""
+function __template_value_ref() {
+    local key="$1"
+    local value="$2"
+    printf -v "__MYCE_V_${key}" '%s' "$value"
+    __myce_value_keys+=("$key")
+    __template_ref="\${__MYCE_V_${key}}"
+}
+
+# Expands argument references for display only; execution uses the references as-is.
+declare -g __template_rendered_cmd=""
+function __render_value_refs() {
+    local text="$1"
+    local key var ref value
+    for key in "${__myce_value_keys[@]}"; do
+        var="__MYCE_V_${key}"
+        ref="\${${var}}"
+        value="${!var}"
+        text="${text//"$ref"/$value}"
+    done
+    __template_rendered_cmd="$text"
+}
+
 # Applies positional and named arguments to a template.
 # Args:
 #   $1: template string
@@ -661,6 +698,8 @@ function __apply_args_to_template() {
     declare -A named_param_delimiters
     declare -A referenced_names
     local out="$template"
+    local safe_values=false
+    [[ "$append_through" == "false" ]] && safe_values=true
     local max_arg_num=-1
     declare -A referenced_positions
 
@@ -700,7 +739,12 @@ function __apply_args_to_template() {
             if (( i > max_arg_num )); then
                 max_arg_num=$i
             fi
-            out="${out//${BASH_REMATCH[2]}/$p_arg}"
+            local p_sub="$p_arg"
+            if [[ "$safe_values" == true ]]; then
+                __template_value_ref "P${i}" "$p_arg"
+                p_sub="$__template_ref"
+            fi
+            out="${out//${BASH_REMATCH[2]}/$p_sub}"
         fi
     done
 
@@ -714,6 +758,10 @@ function __apply_args_to_template() {
             fi
         done
         remaining_args_str="${remaining_args_str% }"
+        if [[ "$safe_values" == true ]]; then
+            __template_value_ref "REST" "$remaining_args_str"
+            remaining_args_str="$__template_ref"
+        fi
 
         out="${out//\$@+/$remaining_args_str}"
         out="${out//\$\*+/$remaining_args_str}"
@@ -729,6 +777,10 @@ function __apply_args_to_template() {
         if [[ ${#args[@]} -gt 0 ]]; then
             printf -v all_args_str '%s ' "${args[@]}"
             all_args_str="${all_args_str% }"
+        fi
+        if [[ "$safe_values" == true ]]; then
+            __template_value_ref "ALL" "$all_args_str"
+            all_args_str="$__template_ref"
         fi
 
         out="${out//\$\{@\}/$all_args_str}"
@@ -753,6 +805,10 @@ function __apply_args_to_template() {
     local param_name
     for param_name in "${!named_params[@]}"; do
         local param_value="${named_params[$param_name]}"
+        if [[ "$safe_values" == true ]]; then
+            __template_value_ref "N_${param_name}" "$param_value"
+            param_value="$__template_ref"
+        fi
         local escaped_value
         escaped_value=$(printf '%s\n' "$param_value" | sed 's/[\/&]/\\&/g')
 
@@ -947,6 +1003,18 @@ if [[ "${!#}" == "@" ]]; then
 fi
 
 
+# When running as root, only source a run commands file that cannot be altered by other users.
+function __runcom_is_trusted() {
+    local file="$1"
+    [[ "$EUID" -ne 0 ]] && return 0
+    [[ -L "$file" ]] && return 1
+
+    local owner mode
+    read -r owner mode < <(stat -c '%u %a' "$file" 2>/dev/null || stat -f '%u %Lp' "$file" 2>/dev/null)
+    [[ "$owner" == "0" && "$mode" =~ ^[0-7]+$ ]] || return 1
+    (( (8#$mode & 8#022) == 0 ))
+}
+
 # Either runs the command or prints the command that would be executed if DRYRUN is 'true'
 #  Command and arguments are passed as parameters
 function runCMD() {
@@ -971,7 +1039,8 @@ function runCMD() {
         fi
 
         # Build the dry-run command string and escape special control characters
-        local dry_cmd_value="$cmd_string"
+        __render_value_refs "$cmd_string"
+        local dry_cmd_value="$__template_rendered_cmd"
         # Append remaining arguments if any
         if [[ $# -gt 0 ]]; then
             dry_cmd_value="$dry_cmd_value $*"
@@ -995,7 +1064,9 @@ function runCMD() {
     log 3 "Executing: $cmd_string $*"
 
     # Before executing the command, run the shell rc file to support aliases and other configurations
-    if [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ]; then
+    if [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ] && ! __runcom_is_trusted "${MYCE_RUNCOM}"; then
+        log 0 "WARNING: Not sourcing '${MYCE_RUNCOM}' as root because it is not root-owned or is writable by others."
+    elif [ "${MYCE_RUNCOM}" != "false" ] && [ -f "${MYCE_RUNCOM}" ]; then
         log 1 "MYCE_RUNCOM: Sourcing shell's run commands file - '${MYCE_RUNCOM}'..."
         # shellcheck source=/dev/null
         . "${MYCE_RUNCOM}" 2>/dev/null
@@ -1021,7 +1092,7 @@ function runCMD() {
     done
 
     # Skip pre-validation for words containing command substitutions — bash resolves them at execution time
-    if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]] && \
+    if [[ -n "$__cmd_word" ]] && [[ "$__cmd_word" != \(* ]] && [[ "$__cmd_word" != *'${__MYCE_V_'* ]] && \
        [[ "$__cmd_word" != *'$('* ]] && [[ "$__cmd_word" != *'`'* ]]; then
         # For paths (containing / or ~), check if file exists and is executable
         # For other commands, use 'type' to find them in PATH or as shell functions
@@ -1063,6 +1134,13 @@ function runCMD() {
     fi
 
     return $exit_code
+}
+
+# Run an argv list through runCMD without losing argument boundaries to eval.
+function runCMD_argv() {
+    local command_string
+    printf -v command_string '%q ' "$@"
+    runCMD "$command_string"
 }
 
 # Function to add or update a key-value pair in an INI file
@@ -1268,6 +1346,10 @@ declare -a conditionalBlockOrder
 declare -a conditional_stack_ids
 declare -a conditional_stack_defs
 
+declare -a __active_include_files
+declare -g __expanded_include_path=""
+declare -g __canonical_include_path=""
+
 function trim() {
     local var="$1"
     var="${var#"${var%%[![:space:]]*}"}"
@@ -1275,14 +1357,134 @@ function trim() {
     printf '%s' "$var"
 }
 
+function __expand_include_path() {
+    local path
+    path="$(trim "$1")"
+    __expanded_include_path=""
+
+    if [[ ${#path} -ge 2 && "$path" == \"*\" ]]; then
+        path="${path:1:${#path}-2}"
+    elif [[ ${#path} -ge 2 && "$path" == \'*\' ]]; then
+        path="${path:1:${#path}-2}"
+    fi
+
+    if [[ -z "$path" || "$path" == *\"* || "$path" == *\'* ||
+          "$path" == *'$('* || "$path" == *'`'* || "$path" == *';'* ||
+          "$path" == *'|'* || "$path" == *'&'* || "$path" == *'<'* ||
+          "$path" == *'>'* || "$path" == *'('* || "$path" == *')'* ||
+          "$path" == *'\\'* || "$path" == *'*'* || "$path" == *'?'* ||
+          "$path" == *'['* || "$path" == *']'* ]]; then
+        return 1
+    fi
+
+    if [[ "$path" == "~" ]]; then
+        path="$HOME"
+    elif [[ "$path" == "~/"* ]]; then
+        path="$HOME/${path:2}"
+    elif [[ "$path" == "~"* ]]; then
+        return 1
+    fi
+
+    local expanded=""
+    local i=0
+    local name value
+    while (( i < ${#path} )); do
+        if [[ "${path:i:1}" != '$' ]]; then
+            expanded+="${path:i:1}"
+            ((i++))
+            continue
+        fi
+
+        ((i++))
+        if [[ "${path:i:1}" == '{' ]]; then
+            ((i++))
+            local start=$i
+            while (( i < ${#path} )) && [[ "${path:i:1}" =~ [a-zA-Z0-9_] ]]; do
+                ((i++))
+            done
+            name="${path:start:i-start}"
+            if [[ ! "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] ||
+               [[ "${path:i:1}" != '}' ]]; then
+                return 1
+            fi
+            ((i++))
+        else
+            if [[ ! "${path:i:1}" =~ [a-zA-Z_] ]]; then
+                return 1
+            fi
+            local start=$i
+            while (( i < ${#path} )) && [[ "${path:i:1}" =~ [a-zA-Z0-9_] ]]; do
+                ((i++))
+            done
+            name="${path:start:i-start}"
+        fi
+
+        value="${!name}"
+        expanded+="$value"
+    done
+
+    __expanded_include_path="$expanded"
+    [[ -n "$expanded" ]]
+}
+
+function __canonicalize_include_path() {
+    local path="$1"
+    local directory target
+    local link_count=0
+
+    [[ "$path" == /* ]] || path="$PWD/$path"
+    directory="$(cd -P -- "$(dirname -- "$path")" 2>/dev/null && pwd -P)" || return 1
+    path="$directory/${path##*/}"
+
+    while [[ -L "$path" ]]; do
+        ((link_count++))
+        if (( link_count > 40 )); then
+            return 1
+        fi
+        target="$(readlink "$path")" || return 1
+        if [[ "$target" == /* ]]; then
+            path="$target"
+        else
+            path="$(dirname -- "$path")/$target"
+        fi
+        directory="$(cd -P -- "$(dirname -- "$path")" 2>/dev/null && pwd -P)" || return 1
+        path="$directory/${path##*/}"
+    done
+
+    [[ -f "$path" ]] || return 1
+    __canonical_include_path="$path"
+}
+
+function __leave_include_file() {
+    local count=${#__active_include_files[@]}
+    if (( count > 0 )); then
+        __active_include_files=("${__active_include_files[@]:0:$((count - 1))}")
+    fi
+}
+
 function process_ini_file() {
     log 1 "Loading file: $1"
     local filepath="$1"
+    local active_identity
+    if ! __canonicalize_include_path "$filepath"; then
+        log 0 "  WARNING: Unable to resolve included file '$filepath'!"
+        return 1
+    fi
+    active_identity="$__canonical_include_path"
+    local active_file
+    for active_file in "${__active_include_files[@]}"; do
+        if [[ "$active_file" == "$active_identity" ]]; then
+            log 0 "  WARNING: Include cycle detected for '$filepath'; skipping it."
+            return 1
+        fi
+    done
+    __active_include_files+=("$active_identity")
     local in_myce_section=false
 
     # Detect the line break character for this file (LF vs CRLF) and warn the user if it is not LF
     if grep -q $'\r' "$1"; then
         log 0 "\e[1;31mWARNING: Detected CRLF line endings in file '$1'.\nThis will cause issues when parsing and will be skipped.  Please convert the file to LF line breaks.\n\e[0m"
+        __leave_include_file
         return 1
     fi
 
@@ -1414,15 +1616,17 @@ function process_ini_file() {
 
         # Check for include statements
         if [[ "$line" =~ ^include[[:space:]]+(.+)$ ]]; then
-            include_file="${BASH_REMATCH[1]}"
-            log 2 "Include Statement detected: Including file - '$include_file'"
-
-            # Path may include tilde
-            include_file=$(eval echo "$include_file")
+            local include_spec="${BASH_REMATCH[1]}"
+            log 2 "Include Statement detected: Including file - '$include_spec'"
+            if ! __expand_include_path "$include_spec"; then
+                log 0 "  WARNING: Unsupported include path '$include_spec'; use a literal path, ~, or simple environment variables."
+                continue
+            fi
+            local include_file="$__expanded_include_path"
 
             # Resolve relative paths based on the current file's directory
             if [[ ! "$include_file" = /* ]]; then
-                include_file="$(dirname "$1")/$include_file"
+                include_file="$(dirname "$filepath")/$include_file"
             fi
 
             if [[ -f "$include_file" ]]; then
@@ -1654,6 +1858,7 @@ function process_ini_file() {
     # done < "$1"
     done 3< <(cat "$1")
     log 2 "" # Add some spacing in extra verbose mode
+    __leave_include_file
 }
 
 # Walks the directory tree from the current directory to root and combines all
@@ -2370,6 +2575,7 @@ function find_and_run_cmd() {
         binary_cmd="$__nested_expanded_cmd"
 
         # Replace positional/named references via shared helper.
+        __myce_value_keys=()
         __apply_args_to_template "$binary_cmd" "false" "$@"
         binary_cmd="$__template_expanded_cmd"
 
@@ -2462,57 +2668,107 @@ function find_and_run_cmd() {
     fi
 }
 
-# Download and extract the latest releast from github to a temp folder
+# Download the requested release archive and stage only the files used by the updater.
 function download_latest_release() {
     local temp_file="$1"
-    local repo="$2"
-    local tag="${3:latest}"
+    local extract_dir="$2"
+    local repo="$3"
+    local tag="${4:-latest}"
+    local github_path
+    local latest_url
+    local archive_entries
+    local archive_path
 
-    # Get the latest release files into a tmp location
+    # Resolve aliases such as "released" and "head" to their archive source.
     log 1 "Checking ${repo} for ${tag} release..."
 
-    case ${tag} in
+    case "${tag}" in
         latest|release|released )
-            tag="$(curl -Ls -o /dev/null -w '%{url_effective}' "${repo}/releases/latest" | awk -F'/' '{print $NF}')"
+            if ! latest_url="$(curl --fail --location --silent --show-error -o /dev/null -w '%{url_effective}' "${repo}/releases/latest")"; then
+                log 0 "Failed to resolve the latest release tag from ${repo}"
+                return 1
+            fi
+            tag="${latest_url##*/}"
             log 1 "Found Latest Release Tag: ${tag}"
-            local github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
-            archive_root="MyCE-${tag#v}"
             ;;
 
         head|main )
             log 1 "Using head of Main branch"
-            local github_path="${repo}/archive/refs/heads/main.tar.gz"
             tag=main
-            archive_root="MyCE-main"
+            github_path="${repo}/archive/refs/heads/main.tar.gz"
             ;;
 
-        # Assume the given value is a version number
+        # Treat any other value as an explicitly requested release tag.
         * )
             log 1 "Using Release Tag: ${tag}"
-            local github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
-            archive_root="MyCE-${tag#v}"
             ;;
     esac
 
+    # Restrict tags to safe URL and archive-name characters before using them.
+    if [[ ! "${tag}" =~ ^v?[[:alnum:]][[:alnum:]._-]*$ ]]; then
+        log 0 "Invalid release tag: ${tag}"
+        return 1
+    fi
 
-    # Download the latest version from the github repo
+    if [[ "${tag}" != "main" ]]; then
+        github_path="${repo}/archive/refs/tags/${tag}.tar.gz"
+    fi
+    archive_root="MyCE-${tag#v}"
+
+    if [[ ! -d "${extract_dir}" || -L "${extract_dir}" ]]; then
+        log 0 "Update temp directory is missing or invalid: ${extract_dir}"
+        return 1
+    fi
+
+    # Download the GitHub source archive to the private update directory.
     log 0 "\nDownloading latest version from GitHub..."
     log 0 "    ${github_path}\n"
 
-
-    # Example: https://github.com/jerrens/MyCE/archive/refs/tags/v26.2.6.tar.gz`
     log 2 "Storing temp file at: ${temp_file}"
     if ! wget --output-document "${temp_file}" --quiet "${github_path}"; then
         log 0 "Failed to download the latest version from ${github_path}"
-        exit 1
+        return 1
     fi
 
-    # Extract the downloaded archive.
-    # Older releases used bash-completion/, newer ones use auto-complete/.
-    tar -xzf "${temp_file}" --directory /tmp \
-        --wildcards "${archive_root}/my" \
-        --wildcards "${archive_root}/auto-complete/*" \
-        --wildcards "${archive_root}/bash-completion/*" 2>/dev/null || true
+    # Inspect the archive first; never unpack its paths directly into a shared directory.
+    if ! archive_entries="$(tar -tzf "${temp_file}")"; then
+        log 0 "Failed to read the downloaded update archive"
+        return 1
+    fi
+
+    if ! grep -Fxq -- "${archive_root}/my" <<< "${archive_entries}"; then
+        log 0 "The downloaded update archive does not contain ${archive_root}/my"
+        return 1
+    fi
+
+    # Extract only the update script and known shell-completion files.
+    if ! mkdir -p -- "${extract_dir}/auto-complete"; then
+        log 0 "Failed to prepare the update temp directory"
+        return 1
+    fi
+
+    if ! tar -xOzf "${temp_file}" -- "${archive_root}/my" > "${extract_dir}/my" ||
+        [[ ! -s "${extract_dir}/my" || -L "${extract_dir}/my" ]]; then
+        log 0 "Failed to extract the MyCE script from the update archive"
+        return 1
+    fi
+
+    for archive_path in auto-complete/_my.zsh auto-complete/my.bash; do
+        if grep -Fxq -- "${archive_root}/${archive_path}" <<< "${archive_entries}"; then
+            if ! tar -xOzf "${temp_file}" -- "${archive_root}/${archive_path}" > "${extract_dir}/${archive_path}" ||
+                [[ ! -s "${extract_dir}/${archive_path}" || -L "${extract_dir}/${archive_path}" ]]; then
+                log 0 "Failed to extract ${archive_path} from the update archive"
+                return 1
+            fi
+        fi
+    done
+
+    if [[ ! -f "${extract_dir}/my" || -L "${extract_dir}/my" ]]; then
+        log 0 "The downloaded update script is missing or invalid"
+        return 1
+    fi
+
+    return 0
 }
 
 
@@ -2530,13 +2786,13 @@ function configure_completion_for_shell() {
 
             if [[ -f "${zsh_rc}" ]]; then
                 if ! grep -q 'autoload -Uz compinit' "${zsh_rc}" 2>/dev/null; then
-                    runCMD sh -c "printf '\nautoload -Uz compinit\ncompinit\n' >> \"${zsh_rc}\""
+                    runCMD_argv sh -c 'printf "\nautoload -Uz compinit\ncompinit\n" >> "$1"' _ "${zsh_rc}"
                 fi
                 if ! grep -q "${zsh_site_dir}" "${zsh_rc}" 2>/dev/null; then
-                    runCMD sh -c "printf '\nfpath=(%s \\$fpath)\n' \"${zsh_site_dir}\" >> \"${zsh_rc}\""
+                    runCMD_argv sh -c 'printf "\nfpath=(%s \$fpath)\n" "$1" >> "$2"' _ "${zsh_site_dir}" "${zsh_rc}"
                 fi
             else
-                runCMD sh -c "printf 'autoload -Uz compinit\\ncompinit\\nfpath=(%s \\$fpath)\\n' \"${zsh_site_dir}\" > \"${zsh_rc}\""
+                runCMD_argv sh -c 'printf "autoload -Uz compinit\ncompinit\nfpath=(%s \$fpath)\n" "$1" > "$2"' _ "${zsh_site_dir}" "${zsh_rc}"
             fi
 
             log 0 "ZSH completion enabled. Start a new zsh session or run 'exec zsh'."
@@ -2550,10 +2806,10 @@ function configure_completion_for_shell() {
 
             if [[ -f "${bash_rc}" ]]; then
                 if ! grep -q '/etc/bash_completion' "${bash_rc}" 2>/dev/null; then
-                    runCMD sh -c "printf '\nif [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\n' >> \"${bash_rc}\""
+                    runCMD_argv sh -c 'printf "\nif [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\n" >> "$1"' _ "${bash_rc}"
                 fi
             else
-                runCMD sh -c "printf 'if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\\n' > \"${bash_rc}\""
+                runCMD_argv sh -c 'printf "if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi\n" > "$1"' _ "${bash_rc}"
             fi
 
             log 0 "Bash completion enabled. Start a new bash session or run 'exec bash'."
@@ -2657,7 +2913,7 @@ function update_script() {
     install_path=${install_path:-$0}
 
     local repo=https://github.com/jerrens/MyCE
-    local temp_file="/tmp/${__AppName}.${tag}.tar.gz"
+    local temp_file
 
 
     # Check for internet access
@@ -2669,10 +2925,21 @@ function update_script() {
     # If 'diff' is requested, then download and show the diff
     if [[ -n "$show_diff" ]]; then
         log 2 "User requested to view diff"
-        # Download and extract the latest released files
-        download_latest_release "${temp_file}" "${repo}" "${tag}"
+        # Keep the archive and staged script in a private directory until the exit trap removes it.
+        __MYCE_UPDATE_TMP_DIR="$(mktemp -d /tmp/myce-update.XXXXXXXX)" || {
+            log 0 "Failed to create a private update temp directory"
+            exit 1
+        }
+        chmod 700 "${__MYCE_UPDATE_TMP_DIR}" || {
+            log 0 "Failed to secure the update temp directory"
+            exit 1
+        }
+        temp_file="${__MYCE_UPDATE_TMP_DIR}/update.tar.gz"
+        if ! download_latest_release "${temp_file}" "${__MYCE_UPDATE_TMP_DIR}" "${repo}" "${tag}"; then
+            exit 1
+        fi
 
-        my_file_path="/tmp/${archive_root}/my"
+        my_file_path="${__MYCE_UPDATE_TMP_DIR}/my"
 
         if ! diff -q "${my_file_path}" "${install_path}" >/dev/null; then
             # Show the diff
@@ -2686,50 +2953,73 @@ function update_script() {
         fi
         log 0
 
-        # Remove the temp file
-        rm "${temp_file}"
-        rm -R "/tmp/${archive_root}"
         exit 0
     fi
 
     if [ "$EUID" -ne 0 ]; then
         log 0 "This should be run as root.  Attempting to elevate permissions..."
-        log 1 "runCMD XXdo $0 $__origArgs"
+        log 1 "runCMD XXdo $0 ${__origArgs[*]}"
 
-        # Re-run this command as sudo while preserving the active shell environment.
+        # Re-run as root with an explicit environment instead of `sudo -E`. `env` runs after
+        # elevation, so these values apply regardless of sudo policy. HOME is only used as the
+        # destination for the user's shell files; the run commands file is never sourced as root.
+        local -a escalation_env=(env
+            "HOME=${HOME:-}"
+            "SHELL=${SHELL:-}"
+            "ZSH_VERSION=${ZSH_VERSION:-}"
+            "BASH_VERSION=${BASH_VERSION:-}"
+            "MYCE_RUNCOM=false")
+        [[ -n "${MYCE_NO_ANSI:-}" ]] && escalation_env+=("MYCE_NO_ANSI=${MYCE_NO_ANSI}")
+        local -a escalation_args
+        local escalation_command
         if [[ $(type -t dzdo) == "file" ]]; then
             log 2 "Using dzdo for privilege escalation"
-            runCMD env SHELL="${SHELL:-}" ZSH_VERSION="${ZSH_VERSION:-}" BASH_VERSION="${BASH_VERSION:-}" dzdo "$0" "$__origArgs"
+            escalation_args=(dzdo "${escalation_env[@]}" "$0" "${__origArgs[@]}")
         else
             log 2 "Using sudo for privilege escalation"
-            runCMD env SHELL="${SHELL:-}" ZSH_VERSION="${ZSH_VERSION:-}" BASH_VERSION="${BASH_VERSION:-}" sudo -E "$0" "$__origArgs"
+            escalation_args=(sudo "${escalation_env[@]}" "$0" "${__origArgs[@]}")
         fi
+        # runCMD evaluates a shell command string, so quote each argument before joining it.
+        printf -v escalation_command '%q ' "${escalation_args[@]}"
+        runCMD "$escalation_command"
         exit
     fi
     # NOTE: Root Level if here
 
     log 1 "Downloading and installing MyCE from GitHub..."
+    # Create a private workspace for the archive and extracted update files.
+    __MYCE_UPDATE_TMP_DIR="$(mktemp -d /tmp/myce-update.XXXXXXXX)" || {
+        log 0 "Failed to create a private update temp directory"
+        exit 1
+    }
+    chmod 700 "${__MYCE_UPDATE_TMP_DIR}" || {
+        log 0 "Failed to secure the update temp directory"
+        exit 1
+    }
+    temp_file="${__MYCE_UPDATE_TMP_DIR}/update.tar.gz"
     log 2 "Temp file will be stored at: ${temp_file}"
     log 2 "Repo: ${repo}"
     log 2 "Tag: ${tag}"
-    download_latest_release "${temp_file}" "${repo}" "${tag}"
+    if ! download_latest_release "${temp_file}" "${__MYCE_UPDATE_TMP_DIR}" "${repo}" "${tag}"; then
+        exit 1
+    fi
 
     log 0 "Updating from v${__Version} to ${tag}..."
 
     # Move 'my' and make it executable
     log 1 "Installing to ${install_path}..."
-    runCMD mv -f "/tmp/${archive_root}/my" "${install_path}"
+    runCMD mv -f "${__MYCE_UPDATE_TMP_DIR}/my" "${install_path}"
     log 1 "\nModifying permissions..."
     runCMD chmod a+x "${install_path}"
 
     # Determine installation auto-completion based on shell type
     local src_file dest_file completion_dir
     if [[ $__Shell == "zsh" ]]; then
-        src_file="/tmp/${archive_root}/auto-complete/_my.zsh"
+        src_file="${__MYCE_UPDATE_TMP_DIR}/auto-complete/_my.zsh"
         dest_file="/usr/local/share/zsh/site-functions/_my"
         completion_dir="/usr/local/share/zsh/site-functions"
     else # Assume BASH
-        src_file="/tmp/${archive_root}/auto-complete/my.bash"
+        src_file="${__MYCE_UPDATE_TMP_DIR}/auto-complete/my.bash"
         dest_file="/etc/bash_completion.d/my.bash_completion"
         completion_dir="/etc/bash_completion.d"
     fi
@@ -2747,9 +3037,6 @@ function update_script() {
     fi
 
     log 0 "Update finished!"
-    log 2 "Removing temp file"
-    rm "${temp_file}"
-    rm -R "/tmp/${archive_root}"
     exit 0
 }
 

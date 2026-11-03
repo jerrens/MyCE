@@ -10,6 +10,57 @@ test_cases = {
         "description": "Test include directive with a missing file - should warn but not fail"
     },
 
+    "include.order.before": {
+        "cmd": "include.before",
+        "pwd": "projectIncludeOrder",
+        "see": "^before$",
+        "description": "Include directives preserve definitions before the include"
+    },
+    "include.order.inline": {
+        "cmd": "include.middle",
+        "pwd": "projectIncludeOrder",
+        "see": "^included$",
+        "description": "Included files are parsed inline, including paths with spaces"
+    },
+    "include.order.after": {
+        "cmd": "include.after",
+        "pwd": "projectIncludeOrder",
+        "see": "^after$",
+        "description": "Definitions after an include are parsed afterward"
+    },
+    "include.order.override": {
+        "cmd": "include.override",
+        "pwd": "projectIncludeOrder",
+        "see": "^local$",
+        "description": "Definitions after an include override definitions from it"
+    },
+    "include.environmentPath": {
+        "cmd": "include.envpath",
+        "pre": "INCLUDE_TEST_DIR='{{TEST_DIR}}/include files'",
+        "pwd": "projectIncludeEnv",
+        "see": "^environment path$",
+        "description": "Environment variables in include paths expand without splitting paths"
+    },
+    "include.tildePath": {
+        "cmd": "include.tildepath",
+        "pre": "HOME='{{TEST_DIR}}/home with spaces'",
+        "pwd": "projectIncludeTilde",
+        "see": "^tilde path$",
+        "description": "Leading tilde in include paths expands to HOME"
+    },
+    "include.cycle": {
+        "cmd": "include.aftercycle",
+        "pwd": "projectIncludeCycle",
+        "see": "cycle handled",
+        "description": "Include cycles are detected and parsing continues"
+    },
+    "include.commandSubstitutionIsNotRun": {
+        "raw_cmd": "INCLUDE_MARKER='{{TEST_DIR}}/include-pwned' __exe__ include.safe; if [ -e '{{TEST_DIR}}/include-pwned' ]; then echo PWNED; else echo SAFE; fi",
+        "pwd": "projectIncludeUnsafe",
+        "see": "SAFE",
+        "description": "Shell syntax in include paths is rejected, not evaluated"
+    },
+
     # Test section/key parsing with unusual whitespace
     "ini.whitespace.key1": {
         "pwd": "projectD",
