@@ -1,6 +1,10 @@
 CONST="foo"
 BIN_ROOT=/bin
 
+# Self-referencing default must not stop later variables from resolving
+REF_ENGINE=${REF_ENGINE:-echo}
+REF_CONTAINER=web1
+
 THIS_DIR=__DIRECTORY__
 
 # Include file
@@ -197,6 +201,9 @@ nestedCallUnrefAppend=${alias.nestedTargetUnrefAppend one two three}
 
 nestedNamedTarget=echo "Output: $named"
 nestedNamedCall=${alias.nestedNamedTarget named:Hello}
+
+refTarget=echo ${REF_ENGINE} $REF_CONTAINER tool
+refChain=${alias.refTarget} install
 
 [subshell]
 # Word extraction tests - regression tests for __extract_first_word() function

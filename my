@@ -28,7 +28,7 @@ function cleanup_update_temp_dir() {
 trap 'cleanup_update_temp_dir; IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.11.2
+__Version=26.11.3
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -2617,6 +2617,11 @@ function find_and_run_cmd() {
                     log 2 "    Found key: $foundKey_value"
                     # Replace only the first occurrence after the prefix
                     binary_cmd="${binary_cmd/"$prefix$slug"/"$prefix$foundKey_value"}"
+                    # A self-referencing definition (e.g. VAR=${VAR:-default}) makes no progress;
+                    # escape it for the shell so the remaining references still get resolved.
+                    if [[ "$binary_cmd" == "$before" ]]; then
+                        binary_cmd="${binary_cmd/"$prefix$slug"/"${prefix}\\$slug"}"
+                    fi
                 else
                     log 1 "The referenced variable ($slug) was not defined! Passing through to eval"
                     # Replace only the first occurrence after the prefix with escaped $

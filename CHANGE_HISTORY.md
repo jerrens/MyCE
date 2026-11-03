@@ -1,5 +1,9 @@
 # Change History
 
+## 26.11.3
+
+* **Fix: Self-Referencing Variable Defaults** - A definition such as `CONTAINER_ENGINE=${CONTAINER_ENGINE:-podman}` no longer stops expansion of remaining `$VAR` references (e.g. `$PHP_CONTAINER`) in commands like `${composer} install`.
+
 ## 26.11.2
 
 * **Security: Privileged Update No Longer Sources User Startup Files** - `my update` elevates with an explicit environment (no `sudo -E`) and `MYCE_RUNCOM=false`. When MyCE runs as root, it sources the run commands file only if it is root-owned, not a symlink, and not group/world-writable.
