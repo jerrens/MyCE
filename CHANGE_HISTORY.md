@@ -1,5 +1,11 @@
 # Change History
 
+## 26.10.21
+
+* **Enhancement: Long-Form Options and Help Handling** - Added `--list`, `--all`, `--descriptions`, `--values`, and `--values-expanded` as long-form alternatives for `list` options, plus `--help`
+* **Enhancement: MyCE Agent Skill Installer** - Added `my update agent-skill` to install or update the skill from a local copy when available, or download it from GitHub otherwise
+* **Portability: Bash Requirements and macOS Compatibility** - Switched to an environment-based Bash shebang, added a clear Bash 4+ requirement with macOS installation guidance, and adjusted command flags for compatibility
+
 ## 26.9.8
 
 * **Enhancement: Reserved `[MYCE]` Metadata Section** - Added support for a dedicated `[MYCE]` section in `.myCommands` files. Keys in the section are treated as configuration metadata only, and never enter the normal command registry. Supported keys are the documented environment-variable aliases `NO_ANSI`, `FILE_NAME`, `COLUMN_WIDTH`, and `RUNCOM`, using the same semantics as `MYCE_NO_ANSI`, `MYCE_FILE_NAME`, `MYCE_COLUMN_WIDTH`, and `MYCE_RUNCOM`. When an equivalent `MYCE_*` environment variable is already set, that environment value remains highest-precedence.
