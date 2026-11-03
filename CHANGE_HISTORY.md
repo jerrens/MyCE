@@ -3,6 +3,7 @@
 ## 26.11.3
 
 * **Fix: Self-Referencing Variable Defaults** - A definition such as `CONTAINER_ENGINE=${CONTAINER_ENGINE:-podman}` no longer stops expansion of remaining `$VAR` references (e.g. `$PHP_CONTAINER`) in commands like `${composer} install`.
+* **Fix: Conditional Variable Expansion** - Conditional checks now resolve the final config value, nested variable references, and Bash-style `-`/`:-` defaults safely, including environment values and `.myCommands.user` overrides.
 
 ## 26.11.2
 
