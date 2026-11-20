@@ -28,7 +28,7 @@ function cleanup_update_temp_dir() {
 trap 'cleanup_update_temp_dir; IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.11.3
+__Version=26.11.20
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -614,7 +614,7 @@ function __replace_named_default_expressions() {
             prev_char="${input:i-1:1}"
         fi
 
-        if [[ "${input:i:prefix_len}" == "$prefix" && "$prev_char" != '\\' ]]; then
+        if [[ "${input:i:prefix_len}" == "$prefix" && "$prev_char" != '\' ]]; then
             local depth=1
             local j=$((i + 2))
 
@@ -626,7 +626,7 @@ function __replace_named_default_expressions() {
                 fi
 
                 local ch="${input:j:1}"
-                if [[ "$ch" == '\\' ]]; then
+                if [[ "$ch" == '\' ]]; then
                     ((j+=2))
                     continue
                 fi
@@ -683,6 +683,47 @@ function __render_value_refs() {
     __template_rendered_cmd="$text"
 }
 
+# Moves argument placeholders out of single-quoted text ('a${ref}b' -> 'a'"${ref}"'b')
+# so eval still expands them as data while the target keeps its single quotes.
+declare -g __single_quote_spliced_cmd=""
+function __splice_single_quoted_refs() {
+    local text="$1"
+    local out=""
+    local quote=""
+    local char ref
+    local i=0
+
+    while (( i < ${#text} )); do
+        char="${text:i:1}"
+
+        if [[ "$quote" == "single" ]]; then
+            if [[ "$char" == "'" ]]; then
+                quote=""
+            elif [[ "${text:i}" =~ ^(\$\{__MYCE_V_[A-Za-z0-9_]+\}) ]]; then
+                ref="${BASH_REMATCH[1]}"
+                out+="'\"${ref}\"'"
+                ((i+=${#ref}))
+                continue
+            fi
+        elif [[ "$char" == '\' ]]; then
+            out+="${text:i:2}"
+            ((i+=2))
+            continue
+        elif [[ "$quote" == "double" ]]; then
+            [[ "$char" == '"' ]] && quote=""
+        elif [[ "$char" == "'" ]]; then
+            quote="single"
+        elif [[ "$char" == '"' ]]; then
+            quote="double"
+        fi
+
+        out+="$char"
+        ((i++))
+    done
+
+    __single_quote_spliced_cmd="$out"
+}
+
 # Applies positional and named arguments to a template.
 # Args:
 #   $1: template string
@@ -734,7 +775,7 @@ function __apply_args_to_template() {
     for (( i=${#args[@]}; i>0; i-- )); do
         local p_arg="${args[$i-1]}"
 
-        if [[ "$out" =~ (^|[^\\])(\$\{?($i)(}|:-[^}\"]*\}?)?) ]]; then
+        if [[ "$out" =~ (^|[^\\])\$\{?$i ]]; then
             referenced_positions[$i]=1
             if (( i > max_arg_num )); then
                 max_arg_num=$i
@@ -744,7 +785,20 @@ function __apply_args_to_template() {
                 __template_value_ref "P${i}" "$p_arg"
                 p_sub="$__template_ref"
             fi
-            out="${out//${BASH_REMATCH[2]}/$p_sub}"
+
+            # ${N:-default} (brace-aware, so defaults may contain nested ${...})
+            __replace_named_default_expressions "$out" "$i" "$p_sub"
+            out="$__template_named_default_result"
+
+            # ${N} and $N
+            local rest="$out" ref
+            out=""
+            while [[ "$rest" =~ (^|[^\\])(\$\{$i\}|\$$i) ]]; do
+                ref="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+                out+="${rest%%"$ref"*}${BASH_REMATCH[1]}$p_sub"
+                rest="${rest#*"$ref"}"
+            done
+            out+="$rest"
         fi
     done
 
@@ -2806,6 +2860,9 @@ function find_and_run_cmd() {
         binary_cmd="${binary_cmd//\\\$/$}"
         log 2 "Expanded command to be executed:\n    $binary_cmd\n"
         log 3 "Loops Taken: $loopCount"
+
+        __splice_single_quoted_refs "$binary_cmd"
+        binary_cmd="$__single_quote_spliced_cmd"
 
         # Run the extracted command with the additional arguments
         __current_cmd="$cmd"  # Set global for DRYRUN metadata lookup

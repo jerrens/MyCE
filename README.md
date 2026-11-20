@@ -195,6 +195,20 @@ Commands support multiple ways to reference arguments:
 - `$@+`, `$*+` - Expands to remaining (non-referenced) arguments only—useful when you reference specific positions but want to pass unconsumed args through
 
 Runtime arguments are treated as data when expanded into a command definition: shell syntax inside an argument, such as `$(...)` or `;`, is not executed. Command definitions themselves remain shell code, so only use `.myCommands` files you trust.
+Argument references are expanded by MyCE even inside single quotes, so the target program still receives its single-quoted text with the value in place. Escape a reference as `\$` to pass it through unchanged for the target program (for example, an inner shell or `awk`):
+
+```ini
+; `my show "a b"` prints <a b>
+show=printf '<%s>\n' '${1}'
+; awk receives '{print $1}'
+column=awk '{print \$1}'
+```
+
+When the single-quoted text is a script (`sh -c`, `bash -c`), an expanded value becomes part of that script and can run as code. Pass the value after the script as a positional argument instead, and escape the inner shell's reference:
+
+```ini
+process=sh -c 'printf "%s\n" "\$1"' _ "${1}"
+```
 
 ##### Basic Positional Arguments
 
@@ -609,7 +623,7 @@ USAGE:
 
 
  By: Jerren Saunders
- Version: 26.9.1
+ Version: 26.11.20
 ```
 
 ### `version`

@@ -24,6 +24,21 @@ test_cases = {
         "see": r"^<\$\(printf PWNED\) ; printf PWNED2>$",
         "description": "All-argument references keep shell syntax in each argument inert"
     },
+    "test.singleQuoted expands argument inside single quotes": {
+        "cmd": "test.singleQuoted \"it's \\$(printf PWNED)\"",
+        "see": r"^<it's \$\(printf PWNED\)>$",
+        "description": "Argument references inside single quotes expand as inert data"
+    },
+    "test.singleQuotedEscaped keeps escaped reference literal": {
+        "cmd": "test.singleQuotedEscaped value",
+        "see": r"^<\$\{1\}>\n<value>$",
+        "description": "An escaped reference inside single quotes passes through to the target"
+    },
+    "test.forwarded quoted script argument": {
+        "cmd": "test.forwarded 'value with spaces'",
+        "see": r"^<value with spaces>$",
+        "description": "Forward a quoted value safely into an inner sh -c script"
+    },
     "test.inertQuoted dry-run": {
         "cmd": "test.inertQuoted '$(printf PWNED)' ?",
         "see": r'''CMD: printf '<%s>\\\\n' "\$\(printf PWNED\)"''',

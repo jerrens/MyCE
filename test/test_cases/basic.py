@@ -29,6 +29,9 @@ test_cases = {
     "test.subdef3 Charlie Delta": "^Charlie Delta$",
     "test.subdef4": "^def ALT$",
     "test.subdef4 Eve Frank": "^Frank Eve$",
+    "test.subdefNested": "^def$",
+    "test.subdefNested Grace": "^Grace$",
+    "test.subdefEscaped Heidi": "^def Heidi$",
 
     "test.var1": "^foo$",
     "test.var2": "^foo$",

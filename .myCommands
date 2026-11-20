@@ -34,7 +34,17 @@ zsh=${CONTAINER_ENGINE} run -it --rm """
     docker.io/ohmyzsh/zsh:${1:-latest} zsh
 """
 
+; ansi2html=${CONTAINER_ENGINE} run --rm -v "$PWD:/work:Z" -w /work docker.io/library/python:3.12-slim \
+;     sh -c 'pip install -q --disable-pip-version-check ansi2html && TGT_PATH=$1; ansi2html --inline < "$TGT_PATH" > "${TGT_PATH%.*}.html"'
+; ansi2html=${CONTAINER_ENGINE} run --rm -v "$PWD:/work:Z" -w /work docker.io/library/python:3.12-slim \
+;     sh -c 'python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q --disable-pip-version-check ansi2html && TGT_PATH="${1}"; ansi2html --inline < "$TGT_PATH" > "${TGT_PATH%.*}.html"'
+ansi2html=${CONTAINER_ENGINE} run --rm -v "$PWD:/work:Z" -w /work docker.io/library/python:3.12-slim \
+    sh -c 'python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q --disable-pip-version-check ansi2html && ansi2html --inline < "\$1" > "\${1%.*}.html"' _ "${1}"
+
 [test]
 zsh=${test} --container docker.io/ohmyzsh/zsh:latest
 ; zsh.smoke=${test} --container docker.io/ohmyzsh/zsh:latest --test-file basic
 zsh.smoke=${test.zsh --test-file basic}
+
+
+start=HTTP_PORT=${1:-${HTTP_PORT:-8080}} podman compose -f "${CADDY_TEST_DIR}/compose.yaml" up -d

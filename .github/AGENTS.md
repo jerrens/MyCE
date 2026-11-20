@@ -172,7 +172,7 @@ CONTAINER_ENGINE=docker  # Override → affects conditional above
 ## Development Context
 
 - **Language:** Bash (POSIX-compatible where possible)
-- **Version:** 26.3.26
+- **Version:** 26.11.20
 - **Author:** Jerren Saunders
 - **Test Suite:** Located in `test/` directory with test cases for various features
 - **Documentation:** README.md with comprehensive feature guide

@@ -99,10 +99,15 @@ subdef1=echo ${1:-def}
 subdef2=echo "${1:-def}"
 subdef3=echo "${1:-def} ${2:-ALT}"
 subdef4=echo "${2:-def} ${1:-ALT}"
+subdefNested=echo "${1:-${NESTED_UNSET_VAR:-def}}"
+subdefEscaped=echo "\${1:-def}" "${1:-alt}"
 inertQuoted=printf '<%s>\n' "$1"
 inertAll=printf '<%s>\n' "$@"
 inertNamed=printf '<%s>\n' "$value"
 inertDefault=printf '<%s>\n' "${1:-fallback}"
+singleQuoted=printf '<%s>\n' '${1}'
+singleQuotedEscaped=printf '<%s>\n' '\${1}' "${1}"
+forwarded=sh -c 'printf "<%s>\n" "\$1"' _ "${1}"
 
 # description: Test variable substitution with CONST
 var1=echo ${CONST}

@@ -1,5 +1,10 @@
 # Change History
 
+## 26.11.20
+
+* **Fix: Nested Defaults in Positional Arguments** - A default that contains its own `${...}`, such as `${1:-${HTTP_PORT:-8080}}`, is now replaced as a whole when an argument is passed. Before, a stray `}` was left behind. Escaped references such as `\${1:-def}` and `\${name:-def}` now stay literal.
+* **Fix: Arguments Inside Single-Quoted Shell Text** - Argument references inside single quotes, such as `'${1}'`, now expand to the passed value instead of staying literal. Escape a reference as `\$1` to pass it through unchanged to the target program. Documented safe positional-argument forwarding for `sh -c`.
+
 ## 26.11.3
 
 * **Fix: Self-Referencing Variable Defaults** - A definition such as `CONTAINER_ENGINE=${CONTAINER_ENGINE:-podman}` no longer stops expansion of remaining `$VAR` references (e.g. `$PHP_CONTAINER`) in commands like `${composer} install`.
