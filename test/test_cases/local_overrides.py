@@ -87,5 +87,27 @@ test_cases = {
         "pwd": "projectLocalOverride",
         "description": "Dryrun should show SRC from .myCommands.local for overridden command"
     },
-}
 
+    # --- Suffix allow-list and my:ignore marker ---
+    "LOCAL: unlisted suffix ignored": {
+        "cmd": "alias.suffix_probe",
+        "see": "from example",
+        "pwd": "projectLocalOverride",
+        "env": {"MY_ALLOW_SUFFIXES": "example"},
+        "description": "MY_ALLOW_SUFFIXES should enable additional suffixes"
+    },
+
+    "LOCAL: unlisted suffix not loaded": {
+        "cmd": "alias.suffix_probe",
+        "see": "Unknown key or command",
+        "pwd": "projectLocalOverride",
+        "description": "Suffixes other than local/user are skipped by default"
+    },
+
+    "LOCAL: my:ignore first line": {
+        "cmd": "alias.ignore_probe",
+        "see": "Unknown key or command",
+        "pwd": "projectLocalOverride",
+        "description": "A file whose first line is '# my:ignore' is skipped"
+    },
+}

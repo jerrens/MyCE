@@ -28,7 +28,7 @@ function cleanup_update_temp_dir() {
 trap 'cleanup_update_temp_dir; IFS="$__MYCE_ORIGINAL_IFS"' EXIT INT TERM
 
 __Author="Jerren Saunders"
-__Version=26.11.20
+__Version=26.11.25
 __ExePath="$0" # Executable path as called
 __ScriptName=$(basename "$0") # File name with extension
 __AppDir=$(dirname "$0") # Path where script is stored
@@ -752,11 +752,16 @@ function __apply_args_to_template() {
     for arg in "${args[@]}"; do
         # Named params must be plain identifiers; avoid matching shell expansions
         # like $(...) or ${...} that may contain ':' and '=' characters.
+        # Names the template never references stay positional so argument order is preserved
+        # (e.g. an artisan command like announcement:delete).
+        local is_named=false
         if [[ "$arg" != *'$'* ]] && [[ "$arg" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)([:=])(.*)$ ]]; then
             local param_name="${BASH_REMATCH[1]}"
             local param_delim="${BASH_REMATCH[2]}"
             local param_value="${BASH_REMATCH[3]}"
-
+            [[ "$template" =~ \$(\{)?${param_name}([^a-zA-Z0-9_]|$) ]] && is_named=true
+        fi
+        if [[ "$is_named" == true ]]; then
             if [[ "$param_value" =~ ^\"(.*)\"$ ]] || [[ "$param_value" =~ ^\'(.*)\'$ ]]; then
                 param_value="${BASH_REMATCH[1]}"
             fi
@@ -1915,6 +1920,31 @@ function process_ini_file() {
     __leave_include_file
 }
 
+# Returns 0 when a candidate .myCommands file should be loaded.  Suffix variants must
+# be 'local', 'user', or listed in MY_ALLOW_SUFFIXES (space/comma separated).  Any file
+# whose first line is a comment containing 'my:ignore' is skipped.
+function __is_loadable_file() {
+    local f=$1 base=$2 first_line suffix allowed
+    if [[ "$f" != "$base" ]]; then
+        suffix="${f:${#base}+1}"
+        local found=false
+        for allowed in local user ${MY_ALLOW_SUFFIXES//,/ }; do
+            allowed="${allowed#.}"
+            if [[ "$suffix" == "$allowed" ]]; then found=true; break; fi
+        done
+        if [[ "$found" != true ]]; then
+            log 3 "  Skipping file with unlisted suffix: $f"
+            return 1
+        fi
+    fi
+    IFS= read -r first_line < "$f" || true
+    if [[ "$first_line" =~ ^[[:space:]]*[^[:alnum:][:space:]]+[[:space:]]*my:ignore([[:space:]]|$) ]]; then
+        log 3 "  Skipping file marked my:ignore: $f"
+        return 1
+    fi
+    return 0
+}
+
 # Walks the directory tree from the current directory to root and combines all
 # keys and values found in ${MY_CUSTOM_FILE} files.  The values closest to the
 # current directory are used
@@ -1941,6 +1971,7 @@ function load_my_custom_files() {
         log 2 "Checking for local override files: ${MY_CUSTOM_FILE}.local"
         for f in "$dir/${MY_CUSTOM_FILE}".*; do
             [[ -f "$f" ]] || continue
+            __is_loadable_file "$f" "$dir/${MY_CUSTOM_FILE}" || continue
             log 3 "  Found override file: $f"
             file_paths+=("$f")
         done
@@ -1948,6 +1979,7 @@ function load_my_custom_files() {
         # Any suffix on the legacy (no trailing 's') filename
         for f in "$dir/${MY_CUSTOM_FILE%?}".*; do
             [[ -f "$f" ]] || continue
+            __is_loadable_file "$f" "$dir/${MY_CUSTOM_FILE%?}" || continue
             log 3 "  Found legacy override file: $f"
             file_paths+=("$f")
         done
@@ -1956,13 +1988,13 @@ function load_my_custom_files() {
         log 2 "Checking for file: ${MY_CUSTOM_FILE}"
         if [[ -f "$dir/${MY_CUSTOM_FILE}" ]]; then
             log 3 "  Found file!"
-            file_paths+=("$dir/${MY_CUSTOM_FILE}")
+            __is_loadable_file "$dir/${MY_CUSTOM_FILE}" "$dir/${MY_CUSTOM_FILE}" && file_paths+=("$dir/${MY_CUSTOM_FILE}")
         fi
         # Try without the trailing 's' for backwards compatibility
         log 2 "Checking for legacy file: ${MY_CUSTOM_FILE%?}"
         if [[ -f "$dir/${MY_CUSTOM_FILE%?}" ]]; then
             log 3 "  Found legacy file!"
-            file_paths+=("$dir/${MY_CUSTOM_FILE%?}")
+            __is_loadable_file "$dir/${MY_CUSTOM_FILE%?}" "$dir/${MY_CUSTOM_FILE%?}" && file_paths+=("$dir/${MY_CUSTOM_FILE%?}")
         fi
         dir=$(dirname "$dir")
     done
@@ -1970,18 +2002,18 @@ function load_my_custom_files() {
     # Always process the home dir files
     # Support both the current and legacy file name for backwards compatibility
     # Add local override file BEFORE main home file
-   for f in "${HOME}/${MY_CUSTOM_FILE}".*; do
-        [[ -f "$f" ]] && file_paths+=("$f")
+    for f in "${HOME}/${MY_CUSTOM_FILE}".*; do
+        [[ -f "$f" ]] && __is_loadable_file "$f" "${HOME}/${MY_CUSTOM_FILE}" && file_paths+=("$f")
     done
     for f in "${HOME}/${MY_CUSTOM_FILE%?}".*; do
-        [[ -f "$f" ]] && file_paths+=("$f")
+        [[ -f "$f" ]] && __is_loadable_file "$f" "${HOME}/${MY_CUSTOM_FILE%?}" && file_paths+=("$f")
     done
 
     # Then add main home file
     if [ -f "${HOME}/${MY_CUSTOM_FILE}" ]; then
-        file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
+        __is_loadable_file "${HOME}/${MY_CUSTOM_FILE}" "${HOME}/${MY_CUSTOM_FILE}" && file_paths+=("${HOME}/${MY_CUSTOM_FILE}")
     elif [ -f "${HOME}/${MY_CUSTOM_FILE%?}" ]; then
-        file_paths+=("${HOME}/${MY_CUSTOM_FILE%?}")
+        __is_loadable_file "${HOME}/${MY_CUSTOM_FILE%?}" "${HOME}/${MY_CUSTOM_FILE%?}" && file_paths+=("${HOME}/${MY_CUSTOM_FILE%?}")
     fi
 
     # Remove duplicate entries, keeping first occurrence (order-preserving)

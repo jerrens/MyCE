@@ -1,5 +1,11 @@
 # Change History
 
+## 26.11.25
+
+* **Enhancement: Allow-List for Local Variant Files** - Only `.myCommands.local` and `.myCommands.user` variants are loaded by default. Other suffixes (such as `.example` or `.bak`) are ignored unless listed in `MY_ALLOW_SUFFIXES` (space or comma separated).
+* **Enhancement: `my:ignore` Marker** - Any config file whose first line is a comment containing `my:ignore` (`#`, `;`, `//`, etc.) is skipped.
+* **Fix: Colon-Style Arguments Stay Positional** - An argument such as `announcement:delete` is only treated as a named parameter when the command template references that name; otherwise it is passed through in its original position.
+
 ## 26.11.20
 
 * **Fix: Nested Defaults in Positional Arguments** - A default that contains its own `${...}`, such as `${1:-${HTTP_PORT:-8080}}`, is now replaced as a whole when an argument is passed. Before, a stray `}` was left behind. Escaped references such as `\${1:-def}` and `\${name:-def}` now stay literal.

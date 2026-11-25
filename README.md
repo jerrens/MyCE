@@ -133,7 +133,9 @@ If you want to include `.myCommands` in source control, it is recommended that y
 
 #### Local Variants
 
-By default, `.myCommands` files with a `.<suffix>` will automatically be parsed (ie. `.myCommands.local`, `.myCommands.user`, `.myCommands.private`, etc).
+By default, `.myCommands` files with a `.<suffix>` will automatically be parsed (ie. `.myCommands.local`, `.myCommands.user`).
+Only the `local` and `user` suffixes are loaded by default; set `MY_ALLOW_SUFFIXES` (space or comma separated, ie. `MY_ALLOW_SUFFIXES="private,work"`) to load others. All other suffixes (`.example`, `.bak`, etc.) are ignored.
+Any file (including the base file) whose first line is a comment containing `my:ignore` (ie. `# my:ignore`, `; my:ignore`, `// my:ignore`) is skipped.
 These variants with a suffix are processed so that they will override or append any existing definitions in the `.myCommands` file.
 This is helpful if the `.myCommands` file is included in a repo, but you need to override the default repo value with a custom variant that applies for your repo, but that doesn't apply for others on the team.
 In is recommended you add the following line to your `.gitignore` repo file: `**/.myCommands.*`.
